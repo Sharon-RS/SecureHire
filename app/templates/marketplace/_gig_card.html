@@ -1,0 +1,6 @@
+<article class="gig-card h-100">
+  <div class="d-flex justify-content-between align-items-start gap-2"><span class="category-chip">{{ gig.category }}</span><span class="status-pill status-{{ gig.status }}">{{ gig.status|title }}</span></div>
+  <h3 class="h5 mt-3 mb-2"><a href="{{ url_for('marketplace.gig_detail', gig_id=gig.id) }}">{{ gig.title }}</a></h3>
+  <p class="text-secondary gig-excerpt">{{ gig.description|truncate(150) }}</p>
+  <div class="d-flex justify-content-between align-items-center mt-auto pt-3 border-top"><span class="budget-label">Budget <strong>${{ "%.2f"|format(gig.budget) }}</strong></span><a class="link-arrow" href="{{ url_for('marketplace.gig_detail', gig_id=gig.id) }}">Details <span aria-hidden="true">&rarr;</span></a></div>
+</article>

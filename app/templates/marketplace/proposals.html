@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Proposals for {{ gig.title }}{% endblock %}
+{% block content %}
+<div class="page-heading d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4"><div><p class="eyebrow mb-1">Gig owner workspace</p><h1 class="h2 mb-1">Proposals for {{ gig.title }}</h1><p class="text-secondary mb-0">Only you can manage proposals for this gig.</p></div><a class="btn btn-outline-dark" href="{{ url_for('marketplace.gig_detail', gig_id=gig.id) }}">Back to gig</a></div>
+{% if proposals %}
+  <div class="row g-3">{% for proposal in proposals %}
+    <div class="col-lg-6"><article class="proposal-card card-surface">
+      <div class="d-flex justify-content-between align-items-start gap-3"><div><a class="fw-semibold" href="{{ url_for('auth.public_profile', user_id=proposal.freelancer.id) }}">{{ proposal.freelancer.profile.display_name }}</a><div class="small text-secondary">{{ proposal.created_at.strftime("%b %d, %Y") }}</div></div><span class="status-pill status-{{ proposal.status }}">{{ proposal.status|title }}</span></div>
+      <p class="preserve-lines mt-3">{{ proposal.cover_letter|truncate(260) }}</p>
+      <div class="d-flex gap-4 small mb-3"><span>Proposed <strong>${{ "%.2f"|format(proposal.proposed_price) }}</strong></span><span>Timeline <strong>{{ proposal.timeline }}</strong></span></div>
+      <a class="btn btn-sm btn-outline-dark" href="{{ url_for('marketplace.proposal_detail', proposal_id=proposal.id) }}">Review proposal</a>
+      {% if proposal.status == "pending" and gig.status == "open" %}
+        <form class="decision-inline mt-3" method="post" action="{{ url_for('marketplace.decide_proposal', proposal_id=proposal.id) }}">{{ decision_forms[proposal.id].hidden_tag() }}<label class="visually-hidden" for="decision-{{ proposal.id }}">Proposal decision</label>{{ decision_forms[proposal.id].decision(class="form-select form-select-sm", id="decision-" ~ proposal.id) }}<button class="btn btn-sm btn-accent" type="submit">Save</button></form>
+      {% endif %}
+    </article></div>
+  {% endfor %}</div>
+{% else %}
+  <div class="empty-state"><h2 class="h5">No proposals yet</h2><p class="text-secondary mb-0">When Buyers respond, proposals will appear here.</p></div>
+{% endif %}
+{% endblock %}

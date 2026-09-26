@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Request conflict{% endblock %}
+{% block content %}<div class="empty-state error-state"><p class="eyebrow">409</p><h1 class="h3">That request conflicts with the current state</h1><p class="text-secondary">Refresh the page to see the latest information.</p><a class="btn btn-accent" href="{{ url_for('main.index') }}">Return home</a></div>{% endblock %}

@@ -1,0 +1,8 @@
+/* Small progressive-enhancement hooks for the base marketplace. */
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("[data-confirm]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      if (!window.confirm(element.dataset.confirm)) event.preventDefault();
+    });
+  });
+});

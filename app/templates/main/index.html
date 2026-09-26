@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Find your next project{% endblock %}
+{% block content %}
+<section class="hero-panel p-4 p-lg-5 mb-5">
+  <div class="row align-items-center g-4">
+    <div class="col-lg-7">
+      <p class="eyebrow mb-3">A better way to work together</p>
+      <h1 class="display-5 fw-bold mb-3">Good work starts with a clear connection.</h1>
+      <p class="lead text-secondary mb-4">Find thoughtful freelance projects, meet skilled people, and build work you are proud to share.</p>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-accent btn-lg" href="{{ url_for('marketplace.browse_gigs') }}">Explore open gigs</a>
+        {% if not current_user.is_authenticated %}
+          <a class="btn btn-outline-dark btn-lg" href="{{ url_for('auth.register') }}">Create an account</a>
+        {% elif current_user.role == "buyer" %}
+          <a class="btn btn-outline-dark btn-lg" href="{{ url_for('marketplace.create_gig_route') }}">Post a gig</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-lg-5"><div class="hero-stat-card"><div class="stat-icon">01</div><h2 class="h5 mt-3">Built around trust</h2><p class="mb-0 text-secondary">Profiles, clear project details, and direct proposals make each next step easy to understand.</p></div></div>
+  </div>
+</section>
+<div class="section-heading d-flex justify-content-between align-items-end mb-3"><div><p class="eyebrow mb-1">Fresh opportunities</p><h2 class="h3 mb-0">Open gigs</h2></div><a class="link-arrow" href="{{ url_for('marketplace.browse_gigs') }}">Browse all gigs <span aria-hidden="true">&rarr;</span></a></div>
+{% if gigs %}
+  <div class="row g-3">{% for gig in gigs %}<div class="col-md-6 col-xl-4">{% include "marketplace/_gig_card.html" %}</div>{% endfor %}</div>
+{% else %}
+  <div class="empty-state"><h3 class="h5">The board is ready for its first project.</h3><p class="text-secondary mb-0">Check back soon for new opportunities.</p></div>
+{% endif %}
+{% endblock %}

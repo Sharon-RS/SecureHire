@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8"><div class="form-card">
+  <p class="eyebrow">For buyers</p><h1 class="h2 mb-2">{{ page_title }}</h1><p class="text-secondary mb-4">Write a clear brief so freelancers understand the project.</p>
+  <form method="post" novalidate>{{ form.hidden_tag() }}
+    <div class="mb-3">{{ form.title.label(class="form-label") }}{{ form.title(class="form-control", placeholder="For example: Brand identity for a neighborhood cafe") }}{% for error in form.title.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-3">{{ form.category.label(class="form-label") }}{{ form.category(class="form-control", placeholder="Design, writing, engineering...") }}{% for error in form.category.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-3">{{ form.description.label(class="form-label") }}{{ form.description(class="form-control", rows="7", placeholder="Describe the goals, deliverables, and context.") }}{% for error in form.description.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-4">{{ form.budget.label(class="form-label") }}<div class="input-group"><span class="input-group-text">$</span>{{ form.budget(class="form-control", min="0.01", step="0.01", placeholder="500.00") }}</div>{% for error in form.budget.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <button class="btn btn-accent" type="submit">{{ form.submit.label.text }}</button><a class="btn btn-link text-secondary" href="{{ url_for('main.dashboard') }}">Cancel</a>
+  </form>
+</div></div></div>
+{% endblock %}

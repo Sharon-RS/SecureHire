@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ profile.display_name }}{% endblock %}
+{% block content %}
+<div class="page-heading mb-4"><p class="eyebrow mb-1">SecureHire member</p><h1 class="h2 mb-1">{{ profile.display_name }}</h1><p class="text-secondary mb-0">{{ profile.user.display_role }}</p></div>
+<div class="profile-card card-surface"><div class="profile-monogram">{{ profile.display_name[:1]|upper }}</div><div><h2 class="h5 mb-2">About</h2><p class="preserve-lines text-secondary">{{ profile.bio or "This member has not added an introduction yet." }}</p><h3 class="h6 mt-4">Skills</h3><p class="preserve-lines mb-0">{{ profile.skills or "No skills listed." }}</p></div></div>
+{% endblock %}

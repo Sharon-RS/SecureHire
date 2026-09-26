@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Proposal for {{ proposal.gig.title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8">
+  <a class="small text-secondary text-decoration-none" href="{{ url_for('marketplace.gig_detail', gig_id=proposal.gig.id) }}">&larr; Back to gig</a>
+  <article class="detail-card card-surface mt-3">
+    <div class="d-flex flex-wrap justify-content-between gap-2"><div><p class="eyebrow mb-1">Proposal for</p><h1 class="h3">{{ proposal.gig.title }}</h1></div><span class="status-pill status-{{ proposal.status }}">{{ proposal.status|title }}</span></div>
+    <p class="text-secondary">Submitted {{ proposal.created_at.strftime("%b %d, %Y") }} by <a href="{{ url_for('auth.public_profile', user_id=proposal.freelancer.id) }}">{{ proposal.freelancer.profile.display_name }}</a></p>
+    <h2 class="h6 mt-4">Cover letter</h2><p class="preserve-lines">{{ proposal.cover_letter }}</p>
+    <div class="row g-3 mt-2"><div class="col-sm-6"><div class="metric-card"><span class="metric-label">Proposed price</span><strong>${{ "%.2f"|format(proposal.proposed_price) }}</strong></div></div><div class="col-sm-6"><div class="metric-card"><span class="metric-label">Estimated timeline</span><strong>{{ proposal.timeline }}</strong></div></div></div>
+    {% if owner_view and proposal.status == "pending" and proposal.gig.status == "open" %}
+      <hr class="my-4"><h2 class="h6">Update proposal</h2><form class="decision-inline" method="post" action="{{ url_for('marketplace.decide_proposal', proposal_id=proposal.id) }}">{{ decision_form.hidden_tag() }}{{ decision_form.decision(class="form-select") }}<button class="btn btn-accent" type="submit">Save decision</button></form>
+    {% endif %}
+  </article>
+</div></div>
+{% endblock %}

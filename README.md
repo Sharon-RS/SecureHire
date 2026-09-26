@@ -1,0 +1,137 @@
+# SecureHire
+
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework for future classroom demonstrations. This milestone adds administrator-managed mode metadata, safety gates, audit records, and nonfunctional placeholders. It does not implement any vulnerability demonstration.
+
+## Technology
+
+- Python 3.12+
+- Flask and Flask-SQLAlchemy
+- Flask-Migrate
+- MySQL (PyMySQL driver)
+- Flask-WTF CSRF protection and Flask-Login
+- Jinja, Bootstrap 5, HTML, CSS, and JavaScript
+- pytest
+
+## Base features
+
+- Buyer, Freelancer, and Admin account roles.
+- Registration, login, POST-only logout, profile viewing, and profile editing.
+- Public profile cards show only display name, role, bio, and skills.
+- Buyers can create, edit, and close their own gigs.
+- Freelancers can search open gigs and submit one proposal per gig.
+- Gig owners can review proposals and accept or reject a pending proposal.
+- Proposal details are visible only to the submitting Freelancer and the gig owner.
+- Authorization is enforced on the server for every private resource and state change.
+
+Normal security controls are enabled: password hashes, CSRF-protected forms, parameterized ORM queries, role and ownership checks, session cookie protections, loopback-only access, Jinja autoescaping, and security response headers.
+
+## Folder structure
+
+```text
+app/
+  blueprints/       HTTP routes for authentication, marketplace, and Security Lab
+  forms/            Validated CSRF-protected forms
+  models/           SQLAlchemy models for marketplace and Security Lab records
+  repositories/     Read/query helpers
+  services/         Account, marketplace, and centralized security-mode rules
+  static/           Local styles/scripts and copied Bootstrap distribution
+  templates/        Shared layout and page templates
+instance/           Local-only runtime data (ignored by Git)
+migrations/         Flask-Migrate/Alembic migrations
+scripts/            Synthetic seed command and local Bootstrap asset copier
+tests/              Isolated pytest tests
+```
+
+## Local setup (Windows PowerShell)
+
+Use Python 3.12 or newer. Create and activate a virtual environment:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+Install Bootstrap into the local Node dependency folder and copy its assets into Flask's static directory. The app serves these local copies; templates do not load a CDN.
+
+```powershell
+npm install
+npm run assets
+```
+
+Copy the example environment file and replace placeholders with local values:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Set SECRET_KEY to a randomly generated value and DATABASE_URL to the local MySQL connection. SESSION_COOKIE_SECURE=false is for the built-in plain-HTTP loopback server; set it to true if serving local HTTPS.
+
+Example local MySQL setup (run in a MySQL client; replace the placeholder password):
+
+```sql
+CREATE DATABASE securehire_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'securehire_app'@'127.0.0.1' IDENTIFIED BY 'replace-with-a-local-password';
+GRANT ALL PRIVILEGES ON securehire_dev.* TO 'securehire_app'@'127.0.0.1';
+```
+
+The example connection string in .env.example uses that database and user. Do not put a real password in source control.
+
+## Database and seed data
+
+After MySQL is configured in .env, apply migrations:
+
+```powershell
+python -m flask --app run_local:app db upgrade
+```
+
+Seed idempotent synthetic marketplace records:
+
+```powershell
+python -m scripts.seed_demo
+```
+
+The seed command reads SECUREHIRE_DEMO_PASSWORD from the local .env, hashes it before storage, and does not print it. For a local classroom demonstration, the synthetic accounts are:
+
+| Role | Email |
+|---|---|
+| Admin | admin@example.test |
+| Buyer | buyer@example.test |
+| Freelancer | freelancer@example.test |
+
+All three use the local-only value you assign to SECUREHIRE_DEMO_PASSWORD (for example, SecureHire-Demo-Only-2026!). These are synthetic development accounts, not production credentials.
+
+## Run the application
+
+```powershell
+python run_local.py
+```
+
+Open http://127.0.0.1:5000. The launcher binds only to loopback and disables Flask debug mode. The request gate checks the socket peer address and an allowed Host value; forwarded proxy headers are ignored.
+
+## Tests
+
+Tests use a fresh in-memory SQLite database by default, separate from the development MySQL URL. To run them:
+
+```powershell
+python -m pytest
+```
+
+To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
+
+The test suite covers the existing marketplace plus Security Lab defaults, allowlisting, admin authorization, CSRF, audit records, the vulnerable-mode safety gate, and payload-free run records.
+
+## Security Lab framework
+
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can view read-only module placeholder pages.
+
+After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
+
+`LAB_ENABLE=false` is the default. A stored vulnerable setting remains effectively mitigated unless the server configuration explicitly enables the flag, the app environment is development or testing, and the accepted socket peer is loopback. Host and proxy headers do not establish locality. Changing the setting requires an authenticated admin, a valid server-validated mode, and a CSRF token.
+
+To exercise the framework gate locally, set `LAB_ENABLE=true` in the local `.env`, restart the server, and select Vulnerable for one module. That only changes the effective status and warning banner: **this milestone contains no vulnerability implementation or attack behavior**. Return the mode to Mitigated when finished.
+
+## Security milestone boundary
+
+All ten modules currently render explanation and mitigation placeholders. SQL injection, stored/reflected XSS, IDOR/BOLA, CSRF demonstration behavior, file upload, path traversal, clickjacking, authentication/session vulnerabilities, and security misconfiguration demonstrations are not implemented. CSRF protection for Security Lab administration remains enabled independently. Lab run records accept only bounded status values and have no payload field.

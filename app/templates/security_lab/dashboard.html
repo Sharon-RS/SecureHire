@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Security Lab{% endblock %}
+{% block content %}
+{% if has_vulnerable_module %}
+<div class="alert alert-danger border-danger border-2 mb-4" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">This state is for controlled academic demonstrations and is not a production security recommendation.</p>
+</div>
+{% endif %}
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-4">
+  <div><p class="eyebrow mb-1">Administrator controls</p><h1 class="h2 mb-2">Security Lab</h1><p class="text-secondary mb-0">Review effective protection and stored settings for each planned module. Demonstrations are not implemented in this milestone.</p></div>
+  <span class="badge text-bg-success fs-6">Local application</span>
+</div>
+<div class="alert alert-info" role="status">Vulnerable mode can take effect only when the server lab flag is explicitly enabled, the application is nonproduction, the socket peer is loopback, and that module's stored setting is vulnerable. Otherwise the effective mode is MITIGATED.</div>
+<div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+  {% for module in modules %}
+  <div class="col" id="{{ module.key }}">
+    <article class="card h-100 shadow-sm">
+      <div class="card-body d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <h2 class="h5 card-title">{{ module.name }}</h2>
+          <span class="badge {% if module.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ module.effective_mode|upper }}</span>
+        </div>
+        <p class="card-text text-secondary">{{ module.description }}</p>
+        <dl class="row small mb-3">
+          <dt class="col-6">Effective mode</dt><dd class="col-6 text-end fw-semibold">{{ module.effective_mode|upper }}</dd>
+          <dt class="col-6">Protection status</dt><dd class="col-6 text-end fw-semibold">{{ module.protection_status }}</dd>
+          <dt class="col-6">Stored setting</dt><dd class="col-6 text-end">{{ module.stored_mode|title }}</dd>
+        </dl>
+        <div class="border rounded p-3 bg-light mb-3">
+          <div class="small text-uppercase text-secondary fw-semibold mb-1">Planned mitigation</div>
+          <p class="small mb-0">{{ module.mitigation }}</p>
+        </div>
+        <div class="mt-auto d-grid gap-2">
+          <a class="btn btn-outline-primary" href="{{ url_for('security_lab.module_detail', vulnerability_key=module.key) }}">Open demo placeholder</a>
+          <form method="post" action="{{ url_for('security_lab.change_mode', vulnerability_key=module.key) }}">
+            {{ mode_form.hidden_tag() }}
+            <label class="form-label small mb-1" for="mode-{{ module.key }}">Stored mode</label>
+            <select class="form-select mb-2" id="mode-{{ module.key }}" name="mode">
+              <option value="mitigated" {% if module.stored_mode == 'mitigated' %}selected{% endif %}>Mitigated</option>
+              <option value="vulnerable" {% if module.stored_mode == 'vulnerable' %}selected{% endif %}>Vulnerable</option>
+            </select>
+            <button class="btn btn-dark w-100" type="submit">Save mode</button>
+          </form>
+        </div>
+      </div>
+    </article>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ gig.title }}{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <a class="small text-secondary text-decoration-none" href="{{ url_for('marketplace.browse_gigs') }}">&larr; Back to gigs</a>
+    <div class="detail-card card-surface mt-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><span class="category-chip">{{ gig.category }}</span><span class="status-pill status-{{ gig.status }}">{{ gig.status|title }}</span></div>
+      <h1 class="h2 mb-3">{{ gig.title }}</h1>
+      <div class="preserve-lines gig-description">{{ gig.description }}</div>
+      <hr class="my-4">
+      <div class="d-flex flex-wrap gap-4"><div><span class="detail-label">Project budget</span><strong class="d-block fs-5">${{ "%.2f"|format(gig.budget) }}</strong></div><div><span class="detail-label">Posted</span><strong class="d-block">{{ gig.created_at.strftime("%b %d, %Y") }}</strong></div></div>
+      <div class="owner-summary mt-4"><div class="profile-monogram profile-monogram-sm">{{ gig.owner.profile.display_name[:1]|upper }}</div><div><span class="detail-label">Posted by</span><a class="fw-semibold d-block" href="{{ url_for('auth.public_profile', user_id=gig.owner.id) }}">{{ gig.owner.profile.display_name }}</a></div></div>
+    </div>
+  </div>
+  <aside class="col-lg-4"><div class="action-card card-surface">
+    <p class="eyebrow mb-2">Next step</p>
+    {% if owner_view %}
+      <h2 class="h5">Your gig</h2><p class="text-secondary">Review proposals from your dashboard or manage them here.</p>
+      {% if gig.status == "open" %}
+        <a class="btn btn-outline-dark w-100 mb-2" href="{{ url_for('marketplace.edit_gig', gig_id=gig.id) }}">Edit gig</a>
+        <a class="btn btn-accent w-100 mb-2" href="{{ url_for('marketplace.manage_proposals', gig_id=gig.id) }}">View proposals</a>
+        <form method="post" action="{{ url_for('marketplace.close_gig_route', gig_id=gig.id) }}">{{ close_form.hidden_tag() }}<button class="btn btn-outline-danger w-100" type="submit">Close gig</button></form>
+      {% else %}
+        <p class="status-pill status-closed">This gig is closed</p><a class="btn btn-outline-dark w-100" href="{{ url_for('marketplace.manage_proposals', gig_id=gig.id) }}">View proposals</a>
+      {% endif %}
+    {% elif gig.status == "closed" %}
+      <h2 class="h5">This gig is closed</h2><p class="text-secondary mb-0">It is no longer accepting proposals.</p>
+    {% elif current_user.is_authenticated and current_user.role == "freelancer" %}
+      {% if already_applied %}<h2 class="h5">Proposal sent</h2><p class="text-secondary mb-0">You have already submitted a proposal for this gig.</p>{% else %}<h2 class="h5">Interested in this project?</h2><p class="text-secondary">Share your approach and proposed timeline with the owner.</p><a class="btn btn-accent w-100" href="{{ url_for('marketplace.submit_proposal_route', gig_id=gig.id) }}">Submit a proposal</a>{% endif %}
+    {% elif current_user.is_authenticated %}
+      <h2 class="h5">Explore the opportunity</h2><p class="text-secondary mb-0">Sign in with a Freelancer account to submit a proposal.</p>
+    {% else %}
+      <h2 class="h5">Interested in this project?</h2><p class="text-secondary">Sign in as a Freelancer to submit a proposal.</p><a class="btn btn-accent w-100" href="{{ url_for('auth.login', next=request.path) }}">Sign in</a>
+    {% endif %}
+  </div></aside>
+</div>
+{% endblock %}

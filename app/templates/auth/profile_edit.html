@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Edit profile{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8"><div class="form-card">
+  <p class="eyebrow">Your account</p><h1 class="h2 mb-2">Edit profile</h1><p class="text-secondary mb-4">Share the details you want other SecureHire members to see.</p>
+  <form method="post" novalidate>{{ form.hidden_tag() }}
+    <div class="mb-3">{{ form.display_name.label(class="form-label") }}{{ form.display_name(class="form-control", autocomplete="name") }}{% for error in form.display_name.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-3">{{ form.bio.label(class="form-label") }}{{ form.bio(class="form-control", rows="5") }}{% for error in form.bio.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-4">{{ form.skills.label(class="form-label") }}{{ form.skills(class="form-control", rows="3", placeholder="For example: research, design, Python") }}{% for error in form.skills.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <button class="btn btn-accent" type="submit">Save changes</button><a class="btn btn-link text-secondary" href="{{ url_for('auth.profile') }}">Cancel</a>
+  </form>
+</div></div></div>
+{% endblock %}

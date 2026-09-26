@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ module.name }}{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">This state is for controlled academic demonstrations and is not a production security recommendation.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3">
+  <div class="col-xl-8">
+    <article class="card shadow-sm">
+      <div class="card-body p-4 p-lg-5">
+        <p class="eyebrow">Demonstration placeholder</p>
+        <h1 class="h2">{{ module.name }}</h1>
+        <p class="lead text-secondary">{{ module.description }}</p>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+          <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+        </div>
+        <div class="alert alert-secondary" role="status"><strong>Demonstration not implemented yet.</strong> This milestone contains no attack code for this module.</div>
+        <h2 class="h5">Planned mitigation</h2>
+        <p class="text-secondary">{{ module.mitigation }}</p>
+        {% if current_user.role == 'admin' %}<a class="btn btn-outline-primary" href="{{ url_for('security_lab.dashboard') }}">Manage stored mode</a>{% endif %}
+      </div>
+    </article>
+  </div>
+</div>
+{% endblock %}

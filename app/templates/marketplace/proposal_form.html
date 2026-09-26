@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Submit proposal{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8"><div class="form-card">
+  <p class="eyebrow">Proposal for</p><h1 class="h2 mb-2">{{ gig.title }}</h1><p class="text-secondary mb-4">Give the owner a clear view of your approach and timing.</p>
+  <form method="post" novalidate>{{ form.hidden_tag() }}
+    <div class="mb-3">{{ form.cover_letter.label(class="form-label") }}{{ form.cover_letter(class="form-control", rows="7", placeholder="Explain how you would approach this project.") }}{% for error in form.cover_letter.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div>
+    <div class="row g-3 mb-4"><div class="col-md-6">{{ form.proposed_price.label(class="form-label") }}<div class="input-group"><span class="input-group-text">$</span>{{ form.proposed_price(class="form-control", min="0.01", step="0.01") }}</div>{% for error in form.proposed_price.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div><div class="col-md-6">{{ form.timeline.label(class="form-label") }}{{ form.timeline(class="form-control", placeholder="For example: 2 weeks") }}{% for error in form.timeline.errors %}<div class="field-error">{{ error }}</div>{% endfor %}</div></div>
+    <button class="btn btn-accent" type="submit">Send proposal</button><a class="btn btn-link text-secondary" href="{{ url_for('marketplace.gig_detail', gig_id=gig.id) }}">Cancel</a>
+  </form>
+</div></div></div>
+{% endblock %}

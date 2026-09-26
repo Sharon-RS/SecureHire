@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Access denied{% endblock %}
+{% block content %}<div class="empty-state error-state"><p class="eyebrow">403</p><h1 class="h3">Access is restricted</h1><p class="text-secondary">This page is available only from the local application or to an authorized account.</p><a class="btn btn-accent" href="{{ url_for('main.index') }}">Return home</a></div>{% endblock %}
