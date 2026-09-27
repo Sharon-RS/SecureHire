@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ module.name }}{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">The intentionally unsafe response is restricted to this authenticated demonstration and an enabled loopback lab gate.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">Reflected XSS</h1>
+    <p class="lead text-secondary">Reflected Cross-Site Scripting occurs when request input is returned in the same response as executable markup instead of being encoded as text.</p>
+    <p>Attack flow: a user submits input, the server inserts it into the response, and the browser interprets unsafe markup. Unlike Stored XSS, this input is not saved for later viewers; it is reflected immediately in this response.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="attack-input-heading">
+      <p class="eyebrow mb-1">ATTACK INPUT</p><h2 class="h5" id="attack-input-heading">Search local demonstration content</h2>
+      <p class="text-secondary">The form accepts ordinary synthetic search text or only the approved harmless script payload. Submissions use POST and retain CSRF protection.</p>
+      <form method="post" action="{{ url_for('security_lab.reflected_xss_page') }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          {{ form.search_term.label(class_="form-label fw-semibold") }}
+          {{ form.search_term(class_="form-control", placeholder="Python") }}
+          {% for error in form.search_term.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        {{ form.submit(class_="btn btn-primary") }}
+      </form>
+      <p class="small text-secondary mt-3 mb-0">Approved harmless input: <code>{{ approved_payload }}</code></p>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="reflected-output-heading">
+      <p class="eyebrow mb-1">REFLECTED OUTPUT</p><h2 class="h5" id="reflected-output-heading">Server response</h2>
+      {% if evidence %}<div id="reflected-xss-output" class="p-3 bg-light rounded">{{ reflected_output }}</div>
+      {% else %}<p class="text-secondary mb-0">Submit a search term to see how the active implementation reflects it.</p>{% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="security-result-heading">
+      <p class="eyebrow mb-1">SECURITY RESULT</p><h2 class="h5" id="security-result-heading">Bounded evidence</h2>
+      {% if evidence %}
+      <dl class="row small mb-3">
+        <dt class="col-sm-5">Submitted demonstration type</dt><dd class="col-sm-7">{{ evidence.demonstration_type }}</dd>
+        <dt class="col-sm-5">Effective mode</dt><dd class="col-sm-7">{{ evidence.effective_mode|upper }}</dd>
+        <dt class="col-sm-5">Response reflected input</dt><dd class="col-sm-7">{{ "Yes" if evidence.intentionally_reflected else "No" }}</dd>
+        <dt class="col-sm-5">Result classification</dt><dd class="col-sm-7">{{ evidence.classification }}</dd>
+        <dt class="col-sm-5">Synthetic matches</dt><dd class="col-sm-7">{{ evidence.result_count }}</dd>
+        <dt class="col-sm-5">Lab run status</dt><dd class="col-sm-7">{{ evidence.run_result|upper }} (status only)</dd>
+        <dt class="col-sm-5">Timestamp (UTC)</dt><dd class="col-sm-7">{{ evidence.timestamp }}</dd>
+      </dl>
+      <p class="small mb-0">Attack input: <code>{{ evidence.attack_input }}</code></p>
+      {% else %}<p class="text-secondary mb-0">Evidence reports mode and output handling without storing submitted input in <code>lab_runs</code>.</p>{% endif %}
+      {% if results %}<h3 class="h6 mt-4">Synthetic local search results</h3><ul class="mb-0">{% for result in results %}<li><strong>{{ result.title }}</strong> — {{ result.category }}: {{ result.description }}</li>{% endfor %}</ul>
+      {% elif evidence and evidence.demonstration_type == "ordinary synthetic search" %}<p class="small text-secondary mt-3 mb-0">No synthetic content matched that safe search term.</p>{% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+      <p class="eyebrow mb-1">MITIGATION</p><h2 class="h5" id="mitigation-heading">Encode for the HTML output context</h2>
+      <p class="mb-2">Mitigated mode HTML-escapes the submitted value before inserting it into this text node. Characters that form tags become text, so the browser does not create or execute a script element. The renderers are separate server-side functions; no blacklist or client-side sanitizer provides the mitigation.</p>
+      <p class="small text-secondary mb-0">CSP is defense in depth, not the fix. Only the response containing the exact approved payload gets an inline-script exception, and only while vulnerable mode is effective through the server-side gate. Other pages keep the default restrictive CSP.</p>
+    </section>
+  </div></article>
+</div></div>
+{% endblock %}

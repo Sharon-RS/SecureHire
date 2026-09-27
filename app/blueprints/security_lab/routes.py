@@ -1,13 +1,24 @@
 """Authenticated Security Lab dashboard, SQLi demo, and placeholders."""
 
+from datetime import datetime, timezone
+
 from flask import abort, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ...extensions import db
-from ...forms.security_lab import SQLiSearchForm, SecurityModeForm, StoredXssDemoForm
+from ...forms.security_lab import (
+    ReflectedXssSearchForm,
+    SQLiSearchForm,
+    SecurityModeForm,
+    StoredXssDemoForm,
+)
 from ...models import LabGigFixture
 from ...services.authorization import roles_required
 from ...services.demos.sqli import MAX_RESULTS, SAFE_SQLI_PAYLOAD
+from ...services.demos.reflected_xss import APPROVED_REFLECTED_XSS_PAYLOAD
+from ...services.demos.reflected_xss.content import search_local_content
+from ...services.demos.reflected_xss.mitigated import render_mitigated_reflection
+from ...services.demos.reflected_xss.vulnerable import render_vulnerable_reflection
 from ...services.demos.sqli.mitigated import search_gigs_mitigated
 from ...services.demos.sqli.vulnerable import search_gigs_vulnerable
 from ...services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
@@ -52,6 +63,8 @@ def module_detail(vulnerability_key: str):
         return _sqli_demonstration(module, state)
     if vulnerability_key == "stored_xss":
         return _stored_xss_demonstration(module, state)
+    if vulnerability_key == "reflected_xss":
+        return _reflected_xss_demonstration(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
 
 
@@ -60,6 +73,15 @@ def module_detail(vulnerability_key: str):
 def stored_xss_page():
     """Canonical hyphenated URL for the Stored XSS demonstration page."""
     return module_detail("stored_xss")
+
+
+@bp.route("/reflected-xss", methods=["GET", "POST"])
+@login_required
+def reflected_xss_page():
+    """Canonical Reflected XSS demonstration page with CSRF-protected POST input."""
+    module = get_vulnerability("reflected_xss")
+    state = get_module_state("reflected_xss")
+    return _reflected_xss_demonstration(module, state)
 
 
 @bp.post("/sqli")
@@ -251,4 +273,80 @@ def _stored_xss_demonstration(module, state, form=None):
         # Page-specific exception exists only to make the exact local proof of concept execute.
         # Output encoding remains the mitigation; CSP is defense in depth, not the solution.
         response.headers["Content-Security-Policy"] = STORED_XSS_VULNERABLE_CSP
+    return response
+
+
+REFLECTED_XSS_VULNERABLE_CSP = (
+    "default-src 'self'; base-uri 'self'; object-src 'none'; "
+    "frame-ancestors 'none'; form-action 'self'; "
+    "script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:"
+)
+
+
+def _reflected_xss_demonstration(module, state):
+    """Reflect one validated request value through a mode-specific isolated renderer."""
+    form = ReflectedXssSearchForm()
+    reflected_output = None
+    evidence = None
+    results = []
+    vulnerable = state["effective_mode"] == "vulnerable"
+
+    if request.method == "POST":
+        if not form.validate_on_submit():
+            response = make_response(render_template(
+                "security_lab/reflected_xss.html", module=module, state=state,
+                form=form, reflected_output=None, evidence=None, results=[],
+                approved_payload=APPROVED_REFLECTED_XSS_PAYLOAD,
+            ))
+            response.status_code = 400
+            return response
+
+        search_term = form.search_term.data.strip()
+        if vulnerable:
+            reflected_output = render_vulnerable_reflection(search_term)
+            classification = (
+                "APPROVED SCRIPT MARKUP REFLECTED WITHOUT ENCODING"
+                if search_term == APPROVED_REFLECTED_XSS_PAYLOAD
+                else "ORDINARY INPUT REFLECTED WITHOUT ENCODING"
+            )
+        else:
+            reflected_output = render_mitigated_reflection(search_term)
+            classification = (
+                "APPROVED PAYLOAD ENCODED AS TEXT"
+                if search_term == APPROVED_REFLECTED_XSS_PAYLOAD
+                else "SAFE SEARCH REFLECTION"
+            )
+
+        if search_term != APPROVED_REFLECTED_XSS_PAYLOAD:
+            results = search_local_content(search_term)
+
+        run = record_lab_run("reflected_xss", "passed")
+        evidence = {
+            "demonstration_type": (
+                "approved harmless proof of concept"
+                if search_term == APPROVED_REFLECTED_XSS_PAYLOAD
+                else "ordinary synthetic search"
+            ),
+            "effective_mode": state["effective_mode"],
+            "intentionally_reflected": True,
+            "classification": classification,
+            "result_count": len(results),
+            "run_result": run.result,
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "attack_input": search_term,
+        }
+
+    response = make_response(render_template(
+        "security_lab/reflected_xss.html", module=module, state=state,
+        form=form, reflected_output=reflected_output, evidence=evidence,
+        results=results, approved_payload=APPROVED_REFLECTED_XSS_PAYLOAD,
+    ))
+    if (
+        vulnerable
+        and evidence is not None
+        and evidence["attack_input"] == APPROVED_REFLECTED_XSS_PAYLOAD
+    ):
+        # This response-only exception enables the approved local alert. Output
+        # encoding remains the mitigation; CSP is defense in depth, not the fix.
+        response.headers["Content-Security-Policy"] = REFLECTED_XSS_VULNERABLE_CSP
     return response

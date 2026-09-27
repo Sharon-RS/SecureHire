@@ -8,6 +8,7 @@ from wtforms.validators import DataRequired, Length, ValidationError
 
 from ..services.demos.sqli import SAFE_SQLI_PAYLOAD
 from ..services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
+from ..services.demos.reflected_xss import APPROVED_REFLECTED_XSS_PAYLOAD
 
 
 class SecurityModeForm(FlaskForm):
@@ -50,3 +51,23 @@ class StoredXssDemoForm(FlaskForm):
         render_kw={"rows": 3, "maxlength": 200, "spellcheck": "false"},
     )
     submit = SubmitField("Submit Demo")
+
+
+def validate_reflected_xss_search_term(_form, field):
+    """Accept plain synthetic search text or the single approved harmless payload."""
+    value = field.data or ""
+    if value == APPROVED_REFLECTED_XSS_PAYLOAD:
+        return
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .,&_-]{0,79}", value) is None:
+        raise ValidationError(
+            "Use ordinary synthetic search text or the approved local demonstration input."
+        )
+
+
+class ReflectedXssSearchForm(FlaskForm):
+    search_term = StringField(
+        "Search term",
+        validators=[DataRequired(), Length(max=160), validate_reflected_xss_search_term],
+        render_kw={"maxlength": 160, "autocomplete": "off"},
+    )
+    submit = SubmitField("Run Demo")

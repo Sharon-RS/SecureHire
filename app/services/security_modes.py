@@ -38,8 +38,8 @@ VULNERABILITIES = (
     VulnerabilityModule(
         "reflected_xss",
         "Reflected XSS",
-        "Explains how request input can be reflected into a response without safe encoding.",
-        "Encode output for its destination context and keep Jinja autoescaping enabled.",
+        "Demonstrates how search input returned in the same response can become executable markup.",
+        "HTML-escape reflected input for its output context and keep Jinja autoescaping enabled.",
     ),
     VulnerabilityModule(
         "idor_bola",
