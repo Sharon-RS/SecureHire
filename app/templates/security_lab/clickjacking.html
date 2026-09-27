@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Clickjacking Security Lab{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">Anti-framing headers (<code>X-Frame-Options</code> and <code>CSP: frame-ancestors 'none'</code>) are omitted exclusively on the synthetic target endpoint (<code>/security-lab/clickjacking/target</code>). In accordance with safety rules, all unrelated application routes retain their full anti-framing protections.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">Clickjacking (UI Redressing)</h1>
+    <p class="lead text-secondary">Clickjacking occurs when an attacker uses transparent or disguised <code>&lt;iframe&gt;</code> layers to trick an authenticated user into clicking an unintended button or control on a vulnerable target site, hijacking the user's authenticated session.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="alert alert-light border mb-4" aria-labelledby="attack-flow-heading">
+      <p class="eyebrow mb-1">ATTACK FLOW</p><h2 class="h5" id="attack-flow-heading">How UI redressing hijacks authenticated user clicks</h2>
+      <ol class="small mb-0">
+        <li>An attacker finds a sensitive, 1-click state-changing action on an application that lacks anti-framing headers.</li>
+        <li>The attacker crafts a deceptive decoy webpage (e.g. "You won a $100 Freelancer Platform Bonus! Click here to claim").</li>
+        <li>The attacker embeds the vulnerable target action inside an <code>&lt;iframe&gt;</code> positioned directly underneath the decoy lure with <code>opacity: 0.0001</code> (virtually invisible).</li>
+        <li>The unsuspecting user clicks the decoy button, but their mouse event strikes the invisible underlying target action, executing it on their behalf.</li>
+      </ol>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="visualizer-heading">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="eyebrow mb-0">INTERACTIVE SIMULATION</p>
+        <form method="post" action="{{ url_for('security_lab.clickjacking_reset') }}" class="d-inline">
+          {{ reset_form.hidden_tag() }}
+          <button type="submit" class="btn btn-outline-secondary btn-sm">Reset endorsements</button>
+        </form>
+      </div>
+      <h2 class="h5" id="visualizer-heading">Clickjacking overlay visualizer</h2>
+      <p class="text-secondary small mb-3">
+        Use the slider below to adjust the opacity of the framed target page. At <strong>0% opacity</strong>, the target is completely invisible beneath the decoy lure (attack state). At <strong>50% opacity</strong>, you can observe how the lure aligns with the real action.
+      </p>
+
+      <div class="bg-light border rounded p-3 mb-3">
+        <label for="opacitySlider" class="form-label fw-semibold small d-flex justify-content-between">
+          <span>Target Iframe Opacity:</span>
+          <span id="opacityValue" class="text-primary fw-bold">75%</span>
+        </label>
+        <input type="range" class="form-range" id="opacitySlider" min="0" max="100" value="75">
+        <div class="d-flex justify-content-between text-muted small">
+          <span>0% (Invisible Attack)</span>
+          <span>50% (Educational Alignment)</span>
+          <span>100% (Fully Visible Target)</span>
+        </div>
+      </div>
+
+      <!-- Simulation Stage Container -->
+      <div class="position-relative border rounded overflow-hidden mx-auto bg-white shadow-sm" style="max-width: 500px; height: 380px;" id="simulation-stage">
+        
+        <!-- Framing Target Layer (Iframe) -->
+        <iframe
+          id="targetIframe"
+          src="{{ url_for('security_lab.clickjacking_target') }}"
+          class="position-absolute top-0 start-0 w-100 h-100 border-0"
+          style="opacity: 0.75; z-index: 10;"
+          title="Framed Target Action"
+        ></iframe>
+
+        <!-- Attacker Decoy Overlay Layer -->
+        <div
+          id="decoyLayer"
+          class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none"
+          style="z-index: 5; background: linear-gradient(135deg, #e3f2fd, #bbdefb);"
+        >
+          <div class="badge text-bg-warning mb-2 fs-6">&#127881; SPECIAL FREELANCER OFFER</div>
+          <h3 class="h5 fw-bold text-dark mb-1">Claim Your $100 Platform Bonus!</h3>
+          <p class="small text-secondary mb-4">Complete your synthetic profile audit and collect free platform credits instantly.</p>
+          <button type="button" class="btn btn-warning btn-lg fw-bold shadow text-dark px-4 py-2" style="pointer-events: none;">
+            {{ decoy_label }}
+          </button>
+          <div class="text-muted small mt-3">&#9888; Decoy Lure Layer (Educational Simulation)</div>
+        </div>
+
+      </div>
+
+      <div class="mt-3 text-center">
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('security_lab.clickjacking_framing_test') }}" target="_blank">
+          Open Standalone Framing Test Harness &#8599;
+        </a>
+      </div>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="headers-heading">
+      <p class="eyebrow mb-1">LIVE HTTP RESPONSE HEADERS</p><h2 class="h5" id="headers-heading">Target endpoint header comparison</h2>
+      <p class="text-secondary small mb-3">
+        In <strong>Mitigated</strong> mode, the server strictly delivers <code>X-Frame-Options: DENY</code> and <code>CSP: frame-ancestors 'none'</code>, forcing browsers to block framing. In <strong>Vulnerable</strong> mode, these anti-framing headers are omitted exclusively on <code>/security-lab/clickjacking/target</code>.
+      </p>
+
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm small mb-3">
+          <thead class="table-light">
+            <tr>
+              <th>Security Header</th>
+              <th>Mitigated Mode (Enforced)</th>
+              <th>Vulnerable Mode (Demonstrated)</th>
+              <th>Current Response State</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-monospace fw-semibold">X-Frame-Options</td>
+              <td class="text-success fw-semibold">DENY</td>
+              <td class="text-danger fw-semibold">OMITTED</td>
+              <td><code>{{ evidence.x_frame_options }}</code></td>
+            </tr>
+            <tr>
+              <td class="font-monospace fw-semibold">CSP frame-ancestors</td>
+              <td class="text-success fw-semibold">'none'</td>
+              <td class="text-danger fw-semibold">OMITTED</td>
+              <td><code>{{ evidence.csp_frame_ancestors }}</code></td>
+            </tr>
+            <tr>
+              <td class="font-monospace fw-semibold">X-Content-Type-Options</td>
+              <td class="text-success">nosniff</td>
+              <td class="text-success">nosniff</td>
+              <td class="text-success">nosniff (Active)</td>
+            </tr>
+            <tr>
+              <td class="font-monospace fw-semibold">Framing Permitted</td>
+              <td class="text-success fw-semibold">NO (Browser Blocks)</td>
+              <td class="text-danger fw-semibold">YES (Browser Frames)</td>
+              <td>
+                {% if evidence.framing_permitted %}
+                <span class="badge text-bg-danger">YES (Framable)</span>
+                {% else %}
+                <span class="badge text-bg-success">NO (Blocked)</span>
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <dl class="row small mb-0">
+        <dt class="col-sm-4">Browser Behavior</dt><dd class="col-sm-8">{{ evidence.browser_behavior }}</dd>
+        <dt class="col-sm-4">Expected Security</dt><dd class="col-sm-8">{{ evidence.expected_behavior }}</dd>
+        <dt class="col-sm-4">Observed Status</dt><dd class="col-sm-8">{{ evidence.observed_behavior }}</dd>
+        <dt class="col-sm-4">Mitigation Verdict</dt><dd class="col-sm-8"><span class="fw-semibold {% if not evidence.framing_permitted %}text-success{% else %}text-danger{% endif %}">{{ evidence.mitigation_status }}</span></dd>
+      </dl>
+    </section>
+
+    <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+      <p class="eyebrow mb-1">MITIGATION</p><h2 class="h5" id="mitigation-heading">Modern defense against UI redressing</h2>
+      <ul class="small mb-0">
+        <li class="mb-2">
+          <strong>1. Content-Security-Policy (CSP) <code>frame-ancestors</code>:</strong>
+          The modern, W3C-recommended standard. Setting <code>Content-Security-Policy: frame-ancestors 'none';</code> instructs the browser to refuse to render the page inside any frame or iframe, regardless of origin.
+        </li>
+        <li class="mb-2">
+          <strong>2. <code>X-Frame-Options: DENY</code> (Defense in Depth):</strong>
+          Legacy HTTP response header for older browsers that lack CSP Level 2 support. Setting <code>DENY</code> forbids all framing. Setting <code>SAMEORIGIN</code> allows framing only by pages on the exact same origin.
+        </li>
+        <li class="mb-2">
+          <strong>3. Why "Frame-Busting" Scripts Are Inadequate:</strong>
+          Legacy JavaScript snippets (such as <code>if (top != self) top.location = self.location;</code>) can be neutralized by attackers using HTML5 <code>&lt;iframe sandbox="allow-forms allow-scripts"&gt;</code> without <code>allow-top-navigation</code>, or by registering an <code>onbeforeunload</code> handler. Declarative HTTP headers are mandatory.
+        </li>
+        <li>
+          <strong>4. SameSite Cookie Attributes:</strong>
+          Configuring session cookies with <code>SameSite=Lax</code> or <code>SameSite=Strict</code> ensures that ambient session credentials are not attached to cross-site state-changing POST requests triggered inside framed contexts.
+        </li>
+      </ul>
+    </section>
+  </div></article>
+</div></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const slider = document.getElementById('opacitySlider');
+  const label = document.getElementById('opacityValue');
+  const iframe = document.getElementById('targetIframe');
+
+  if (slider && label && iframe) {
+    slider.addEventListener('input', function() {
+      const val = this.value;
+      label.textContent = val + '%';
+      iframe.style.opacity = (val / 100).toString();
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Path Traversal Security Lab{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">Directory containment validation is omitted for demonstration. In accordance with safety rules, access is strictly confined to the dedicated synthetic lab fixture directory and never accesses host operating system files.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">Path Traversal</h1>
+    <p class="lead text-secondary">In freelance marketplaces, applications frequently display contract templates, platform guidelines, and invoice summaries. If an application constructs file paths from user input without canonicalization and containment verification, attackers can supply directory traversal sequences (such as <code>../</code> or <code>..\</code>) to escape the intended directory and read sensitive files across the filesystem.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="alert alert-light border mb-4" aria-labelledby="attack-flow-heading">
+      <p class="eyebrow mb-1">ATTACK FLOW</p><h2 class="h5" id="attack-flow-heading">How directory traversal breaches filesystem boundaries</h2>
+      <ol class="small mb-0">
+        <li>An application accepts a filename parameter (e.g. <code>?doc=freelancer_guidelines.txt</code>) to display files from an intended folder (<code>public/</code>).</li>
+        <li>An attacker supplies traversal sequences (e.g. <code>../restricted/synthetic_server_config.ini</code> or <code>..\restricted\confidential_contract.txt</code>).</li>
+        <li>Without canonical resolution and boundary checks, naive path concatenation resolves outside the allowed subfolder.</li>
+        <li>The server opens and returns internal server configuration files, credentials, or proprietary documents to the attacker.</li>
+      </ol>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="traversal-demo-heading">
+      <p class="eyebrow mb-1">DOCUMENT VIEWER DEMONSTRATION</p><h2 class="h5" id="traversal-demo-heading">Select a demonstration preset or enter a document path</h2>
+      <p class="text-secondary small mb-3">
+        In <strong>Mitigated</strong> mode, the server canonicalizes the path with <code>Path.resolve()</code> and verifies that it remains inside the designated <code>public/</code> folder via <code>is_relative_to()</code>. In <strong>Vulnerable</strong> mode, the containment check is bypassed for demonstration, allowing traversal into the sibling <code>restricted/</code> fixture folder while strictly preventing host OS escape.
+      </p>
+
+      <form method="post" action="{{ url_for('security_lab.path_traversal_submit') }}" class="border rounded p-3 bg-light">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label for="preset_case" class="form-label fw-semibold">Choose demonstration preset:</label>
+          {{ form.preset_case(class="form-select", id="preset_case") }}
+          <div class="form-text">Select a pre-configured legitimate or traversal test case, or choose "Custom path input" to experiment.</div>
+        </div>
+
+        <div class="mb-3" id="custom-path-group">
+          <label for="document_path" class="form-label fw-semibold">Document path:</label>
+          {{ form.document_path(class="form-control font-monospace", id="document_path") }}
+          <div class="form-text">Path relative to the public document repository. Example: <code>freelancer_guidelines.txt</code> or <code>../restricted/synthetic_server_config.ini</code>.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">View Document</button>
+      </form>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="evidence-heading">
+      <p class="eyebrow mb-1">SERVER DECISION & BOUNDED EVIDENCE</p><h2 class="h5" id="evidence-heading">Inspection results</h2>
+      {% if evidence %}
+      <dl class="row small mb-3">
+        <dt class="col-sm-4">Effective mode</dt><dd class="col-sm-8">{{ evidence.effective_mode|upper }}</dd>
+        <dt class="col-sm-4">Requested path</dt><dd class="col-sm-8"><code class="text-break">{{ evidence.requested_path }}</code></dd>
+        <dt class="col-sm-4">Resolved target</dt><dd class="col-sm-8"><code class="text-break">{{ evidence.resolved_path }}</code></dd>
+        <dt class="col-sm-4">Target directory</dt><dd class="col-sm-8"><span class="badge text-bg-secondary">{{ evidence.target_subdirectory }}</span></dd>
+        <dt class="col-sm-4">Containment verdict</dt>
+        <dd class="col-sm-8">
+          {% if evidence.containment_verdict == 'CONTAINED_IN_PUBLIC' %}
+            <span class="badge text-bg-success">CONTAINED IN PUBLIC</span>
+          {% elif evidence.containment_verdict == 'ESCAPED_TO_RESTRICTED' %}
+            <span class="badge text-bg-danger">ESCAPED TO RESTRICTED FIXTURE</span>
+          {% elif evidence.containment_verdict == 'TRAVERSAL_BLOCKED' %}
+            <span class="badge text-bg-warning text-dark">TRAVERSAL BLOCKED</span>
+          {% elif evidence.containment_verdict == 'OUT_OF_BOUNDS_BLOCKED' %}
+            <span class="badge text-bg-dark">OUT OF BOUNDS BLOCKED (HARD LAB BOUNDARY)</span>
+          {% else %}
+            <span class="badge text-bg-secondary">{{ evidence.containment_verdict }}</span>
+          {% endif %}
+        </dd>
+        <dt class="col-sm-4">Expected behavior</dt><dd class="col-sm-8">{{ evidence.expected_behavior }}</dd>
+        <dt class="col-sm-4">Observed behavior</dt><dd class="col-sm-8">{{ evidence.observed_behavior }}</dd>
+        <dt class="col-sm-4">Mitigation status</dt><dd class="col-sm-8">{{ evidence.mitigation_status }}</dd>
+        <dt class="col-sm-4">Lab run result</dt><dd class="col-sm-8">{{ evidence.run_result|upper }} (status only)</dd>
+        <dt class="col-sm-4">Timestamp (UTC)</dt><dd class="col-sm-8">{{ evidence.timestamp }}</dd>
+      </dl>
+
+      {% if evidence.file_content_preview %}
+      <div class="mt-3">
+        <label class="form-label fw-semibold small">Retrieved Document Content Preview:</label>
+        <pre class="bg-dark text-light p-3 rounded small mb-0 overflow-auto" style="max-height: 250px;"><code>{{ evidence.file_content_preview }}</code></pre>
+      </div>
+      {% endif %}
+
+      {% else %}
+      <p class="text-secondary mb-0">Select a demonstration preset or enter a document path above to see the server's path resolution decision. In compliance with safety rules, audit logs record only bounded status codes, never file contents or raw payloads.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="fixtures-guide-heading">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="eyebrow mb-0">SYNTHETIC LAB FIXTURES</p>
+        <form method="post" action="{{ url_for('security_lab.path_traversal_reset') }}" class="d-inline">
+          {{ reset_form.hidden_tag() }}
+          <button type="submit" class="btn btn-outline-secondary btn-sm">Reset synthetic fixtures</button>
+        </form>
+      </div>
+      <h2 class="h5" id="fixtures-guide-heading">Designated fixture directory structure</h2>
+      <p class="text-secondary small mb-3">All demonstration files reside strictly in <code>instance/lab_fixtures/path_traversal/</code>. Real operating system files are never accessed.</p>
+
+      <div class="row g-3 small">
+        <div class="col-md-6">
+          <div class="card h-100 bg-light border">
+            <div class="card-header fw-semibold text-success">
+              <span class="badge text-bg-success me-1">&#10003;</span> Public Directory (<code>public/</code>)
+            </div>
+            <div class="card-body">
+              <p class="text-muted small mb-2">Legitimate documents permitted for public retrieval:</p>
+              <ul class="list-unstyled mb-0">
+                {% for f in public_files %}
+                <li><code>public/{{ f }}</code></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100 bg-light border">
+            <div class="card-header fw-semibold text-danger">
+              <span class="badge text-bg-danger me-1">&#9888;</span> Restricted Directory (<code>restricted/</code>)
+            </div>
+            <div class="card-body">
+              <p class="text-muted small mb-2">Confidential synthetic fixtures targeted by traversal:</p>
+              <ul class="list-unstyled mb-0">
+                {% for f in restricted_files %}
+                <li><code>restricted/{{ f }}</code></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+      <p class="eyebrow mb-1">MITIGATION</p><h2 class="h5" id="mitigation-heading">Four pillars of secure path traversal defense</h2>
+      <ul class="small mb-0">
+        <li class="mb-2"><strong>1. Canonical Path Resolution:</strong> Never rely on string-matching or naive prefix checks. Normalize and resolve the path using <code>Path.resolve()</code> or <code>os.path.realpath()</code> to collapse all symbolic links, relative references (<code>..</code>, <code>.</code>), and redundant separators.</li>
+        <li class="mb-2"><strong>2. Strict Containment Verification:</strong> Verify that the resolved target is strictly contained inside the designated root directory: <code>resolved_target.is_relative_to(allowed_root)</code> (Python 3.9+). If the target does not share the allowed root prefix, immediately reject the request.</li>
+        <li class="mb-2"><strong>3. Indirect Object Identifiers:</strong> In production web applications, avoid exposing filesystem paths in query parameters or forms. Instead, use an opaque identifier (e.g. database ID or key in an allowlisted dictionary) that maps server-side to an authorized file location.</li>
+        <li><strong>4. Windows-Specific Path Defenses:</strong> On Windows platforms, defend against backslash separators (<code>..\</code>), drive letters (<code>C:\</code>), UNC shares (<code>\\server\share</code>), Alternate Data Streams (<code>::$DATA</code>), and trailing dots/spaces.</li>
+      </ul>
+    </section>
+  </div></article>
+</div></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const presetSelect = document.getElementById('preset_case');
+  const pathInput = document.getElementById('document_path');
+  const presets = {
+    'legitimate_public': 'freelancer_guidelines.txt',
+    'traversal_unix': '../restricted/synthetic_server_config.ini',
+    'traversal_win': '..\\restricted\\synthetic_server_config.ini',
+    'traversal_nested': '....//restricted/synthetic_server_config.ini',
+    'traversal_contract': '../restricted/confidential_contract.txt',
+    'traversal_os_escape': '../../../../Windows/win.ini'
+  };
+
+  if (presetSelect && pathInput) {
+    presetSelect.addEventListener('change', function() {
+      if (this.value in presets) {
+        pathInput.value = presets[this.value];
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

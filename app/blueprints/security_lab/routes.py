@@ -2,15 +2,19 @@
 
 from datetime import datetime, timezone
 
-from flask import abort, flash, make_response, redirect, render_template, request, send_file, url_for
+from flask import abort, flash, make_response, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
 
 from ...extensions import csrf as csrf_protection, db
 from ...forms.security_lab import (
+    ClickjackingResetForm,
+    ClickjackingTargetActionForm,
     CsrfFixtureResetForm,
     FileUploadDemoForm,
     FileUploadResetForm,
     IdorBolaReadForm,
+    PathTraversalDemoForm,
+    PathTraversalResetForm,
     ReflectedXssSearchForm,
     SQLiSearchForm,
     SecurityModeForm,
@@ -53,6 +57,28 @@ from ...services.demos.file_upload.storage import (
     get_user_active_upload,
 )
 from ...services.demos.file_upload.vulnerable import process_vulnerable_upload
+from ...services.demos.path_traversal import (
+    DEFAULT_DOCUMENT,
+    PRESET_MAP,
+    TRAVERSAL_PRESETS,
+)
+from ...services.demos.path_traversal.fixtures import (
+    list_public_fixtures,
+    list_restricted_fixtures,
+    reset_path_traversal_fixtures,
+)
+from ...services.demos.path_traversal.mitigated import process_mitigated_read
+from ...services.demos.path_traversal.vulnerable import process_vulnerable_read
+from ...services.demos.clickjacking import (
+    CLICKJACKING_DEMO_DESCRIPTION,
+    CLICKJACKING_DEMO_TITLE,
+    DECOY_BUTTON_LABEL,
+    MITIGATED_FRAME_ANCESTORS,
+    MITIGATED_X_FRAME_OPTIONS,
+    REAL_BUTTON_LABEL,
+)
+from ...services.demos.clickjacking.mitigated import get_mitigated_clickjacking_evidence
+from ...services.demos.clickjacking.vulnerable import get_vulnerable_clickjacking_evidence
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -99,6 +125,10 @@ def module_detail(vulnerability_key: str):
         return _render_csrf_page(module, state)
     if vulnerability_key == "file_upload":
         return _render_file_upload_page(module, state)
+    if vulnerability_key == "path_traversal":
+        return _render_path_traversal_page(module, state)
+    if vulnerability_key == "clickjacking":
+        return _render_clickjacking_page(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
 
 
@@ -312,6 +342,134 @@ def file_upload_reset():
     return redirect(url_for("security_lab.file_upload_page"))
 
 
+@bp.get("/path-traversal")
+@login_required
+def path_traversal_page():
+    """Display the Path Traversal lesson and document viewer controls."""
+    module = get_vulnerability("path_traversal")
+    state = get_module_state("path_traversal")
+    return _render_path_traversal_page(module, state)
+
+
+@bp.post("/path-traversal")
+@login_required
+def path_traversal_submit():
+    """Process a document view request through the effective security mode."""
+    module = get_vulnerability("path_traversal")
+    state = get_module_state("path_traversal")
+    form = PathTraversalDemoForm()
+
+    if not form.validate_on_submit():
+        return _render_path_traversal_page(module, state, form=form, status_code=400)
+
+    preset_case = form.preset_case.data
+    requested_path = ""
+    if preset_case != "custom" and preset_case in PRESET_MAP:
+        requested_path = PRESET_MAP[preset_case].path
+    else:
+        requested_path = (form.document_path.data or "").strip()
+
+    if not requested_path:
+        flash("Please select a demonstration preset or enter a document path.", "warning")
+        return _render_path_traversal_page(module, state, form=form, status_code=400)
+
+    is_vulnerable = state["effective_mode"] == "vulnerable"
+    if is_vulnerable:
+        success, evidence, status_code = process_vulnerable_read(requested_path)
+    else:
+        success, evidence, status_code = process_mitigated_read(requested_path)
+
+    run_result = "passed" if success else "blocked"
+    run = record_lab_run("path_traversal", run_result)
+    evidence["run_result"] = run.result
+
+    return _render_path_traversal_page(
+        module, state, form=form, evidence=evidence, status_code=status_code
+    )
+
+
+@bp.post("/path-traversal/reset")
+@login_required
+def path_traversal_reset():
+    """Reset and re-seed all synthetic path traversal fixtures."""
+    form = PathTraversalResetForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    reset_path_traversal_fixtures()
+    flash("Path traversal synthetic fixtures restored to initial state.", "info")
+    return redirect(url_for("security_lab.path_traversal_page"))
+
+
+@bp.get("/clickjacking")
+@login_required
+def clickjacking_page():
+    """Display the Clickjacking lesson and interactive visualizer."""
+    module = get_vulnerability("clickjacking")
+    state = get_module_state("clickjacking")
+    return _render_clickjacking_page(module, state)
+
+
+@bp.get("/clickjacking/target")
+@login_required
+def clickjacking_target():
+    """The synthetic target page intended for framing demonstration."""
+    module = get_vulnerability("clickjacking")
+    state = get_module_state("clickjacking")
+    form = ClickjackingTargetActionForm()
+    endorsements = session.get("synthetic_endorsements", 0)
+    return render_template(
+        "security_lab/clickjacking_target.html",
+        module=module,
+        state=state,
+        form=form,
+        endorsements=endorsements,
+        button_label=REAL_BUTTON_LABEL,
+    )
+
+
+@bp.post("/clickjacking/target")
+@login_required
+def clickjacking_target_action():
+    """Handle 1-click synthetic endorsement action."""
+    module = get_vulnerability("clickjacking")
+    state = get_module_state("clickjacking")
+    form = ClickjackingTargetActionForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    session["synthetic_endorsements"] = session.get("synthetic_endorsements", 0) + 1
+    record_lab_run("clickjacking", "passed")
+    flash("Synthetic freelancer skill endorsement registered!", "success")
+    return redirect(url_for("security_lab.clickjacking_target"))
+
+
+@bp.get("/clickjacking/framing-test")
+@login_required
+def clickjacking_framing_test():
+    """Standalone minimal framing harness for automated and browser testing."""
+    module = get_vulnerability("clickjacking")
+    state = get_module_state("clickjacking")
+    return render_template(
+        "security_lab/clickjacking_framing_test.html",
+        module=module,
+        state=state,
+    )
+
+
+@bp.post("/clickjacking/reset")
+@login_required
+def clickjacking_reset():
+    """Reset the synthetic endorsement counter."""
+    form = ClickjackingResetForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    session["synthetic_endorsements"] = 0
+    flash("Synthetic endorsement counter reset to 0.", "info")
+    return redirect(url_for("security_lab.clickjacking_page"))
+
+
 
 @bp.route("/idor", methods=["GET", "POST"])
 @login_required
@@ -518,6 +676,61 @@ def _render_file_upload_page(module, state, form=None, evidence=None, status_cod
             samples=DEMONSTRATION_SAMPLES,
             allowed_extensions=sorted(ALLOWED_EXTENSIONS),
             max_size_kb=MAX_FILE_SIZE_BYTES // 1024,
+        ),
+        status_code,
+    )
+
+
+def _render_path_traversal_page(module, state, form=None, evidence=None, status_code=200):
+    """Render the Path Traversal demonstration page with bounded evidence."""
+    if form is None:
+        form = PathTraversalDemoForm()
+        form.document_path.data = DEFAULT_DOCUMENT
+    reset_form = PathTraversalResetForm()
+    public_files = list_public_fixtures()
+    restricted_files = list_restricted_fixtures()
+
+    return make_response(
+        render_template(
+            "security_lab/path_traversal.html",
+            module=module,
+            state=state,
+            form=form,
+            reset_form=reset_form,
+            evidence=evidence,
+            presets=TRAVERSAL_PRESETS,
+            public_files=public_files,
+            restricted_files=restricted_files,
+        ),
+        status_code,
+    )
+
+
+def _render_clickjacking_page(module, state, status_code=200):
+    """Render the Clickjacking lesson page with interactive framing simulation."""
+    reset_form = ClickjackingResetForm()
+    is_vulnerable = state["effective_mode"] == "vulnerable"
+    evidence = (
+        get_vulnerable_clickjacking_evidence()
+        if is_vulnerable
+        else get_mitigated_clickjacking_evidence()
+    )
+    endorsements = session.get("synthetic_endorsements", 0)
+
+    return make_response(
+        render_template(
+            "security_lab/clickjacking.html",
+            module=module,
+            state=state,
+            reset_form=reset_form,
+            evidence=evidence,
+            endorsements=endorsements,
+            decoy_label=DECOY_BUTTON_LABEL,
+            real_label=REAL_BUTTON_LABEL,
+            demo_title=CLICKJACKING_DEMO_TITLE,
+            demo_description=CLICKJACKING_DEMO_DESCRIPTION,
+            mitigated_xfo=MITIGATED_X_FRAME_OPTIONS,
+            mitigated_csp=MITIGATED_FRAME_ANCESTORS,
         ),
         status_code,
     )

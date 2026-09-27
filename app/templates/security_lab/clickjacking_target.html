@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Target Freelance Action — SecureHire</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 1.5rem;
+      margin: 0;
+    }
+    .action-card {
+      max-width: 440px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+      padding: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="action-card text-center">
+    <div class="badge text-bg-primary mb-2">SYNTHETIC FREELANCER PROFILE</div>
+    <h1 class="h4 mb-1">Jane Doe</h1>
+    <p class="text-secondary small mb-3">Senior Web Security Consultant &middot; Verified Freelancer</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show small py-2" role="alert">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="bg-light border rounded p-3 mb-3">
+      <div class="display-6 fw-bold text-primary" id="endorsement-counter">{{ endorsements }}</div>
+      <div class="text-muted small">Community Skill Endorsements</div>
+    </div>
+
+    <form method="post" action="{{ url_for('security_lab.clickjacking_target_action') }}" id="endorsement-form">
+      {{ form.hidden_tag() }}
+      <button type="submit" class="btn btn-success btn-lg w-100 fw-semibold" id="target-action-button">
+        {{ button_label }}
+      </button>
+    </form>
+    <div class="text-muted small mt-2">1-Click Synthetic Action &middot; Harmless Laboratory Demo</div>
+  </div>
+</body>
+</html>

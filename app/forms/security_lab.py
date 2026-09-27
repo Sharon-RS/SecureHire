@@ -106,3 +106,40 @@ class FileUploadDemoForm(FlaskForm):
 class FileUploadResetForm(FlaskForm):
     submit = SubmitField("Clear uploaded files")
 
+
+class PathTraversalDemoForm(FlaskForm):
+    preset_case = SelectField(
+        "Demonstration Preset",
+        choices=[
+            ("custom", "Custom path input (type below)"),
+            ("legitimate_public", "Legitimate Public File: freelancer_guidelines.txt"),
+            ("traversal_unix", "Forward-Slash Traversal: ../restricted/synthetic_server_config.ini"),
+            ("traversal_win", r"Windows Backslash Traversal: ..\restricted\synthetic_server_config.ini"),
+            ("traversal_nested", "Nested Traversal Sequence: ....//restricted/synthetic_server_config.ini"),
+            ("traversal_contract", "Confidential Contract: ../restricted/confidential_contract.txt"),
+            ("traversal_os_escape", "Host OS Escape Attempt: ../../../../Windows/win.ini (Safe Boundary Check)"),
+        ],
+        default="custom",
+    )
+    document_path = StringField(
+        "Document Path",
+        validators=[Length(max=260)],
+        render_kw={
+            "placeholder": "e.g. freelancer_guidelines.txt or ../restricted/synthetic_server_config.ini",
+            "autocomplete": "off",
+        },
+    )
+    submit = SubmitField("View Document")
+
+
+class PathTraversalResetForm(FlaskForm):
+    submit = SubmitField("Reset synthetic fixtures")
+
+
+class ClickjackingTargetActionForm(FlaskForm):
+    submit = SubmitField("Endorse Freelancer Skill")
+
+
+class ClickjackingResetForm(FlaskForm):
+    submit = SubmitField("Reset synthetic endorsement count")
+

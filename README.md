@@ -123,11 +123,11 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, and File Upload behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
+The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, File Upload, Path Traversal, and Clickjacking behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, and Unrestricted File Upload demonstrations; the other module pages are placeholders.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, and Clickjacking demonstrations; the other module pages are placeholders.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
@@ -145,6 +145,10 @@ To exercise CSRF, run the synthetic seed command and sign in as `buyer@example.t
 
 To exercise Unrestricted File Upload, sign in with any synthetic account and open `/security-lab/file-upload`. In Mitigated mode, submit the benign samples to observe successful validation and server-controlled UUID storage; submit the harmless PHP, Python, or disguised-extension samples to see them rejected with HTTP 400. In Vulnerable mode, when the central loopback gate is open, submit the harmless PHP sample to observe unvalidated acceptance and storage of dangerous extensions in the isolated lab directory. Files are never executed. Use the reset action to clear uploaded demonstration files. See [docs/security-lab/file-upload.md](docs/security-lab/file-upload.md).
 
+To exercise Path Traversal, sign in with any synthetic account and open `/security-lab/path-traversal`. In Mitigated mode, view legitimate public files (`freelancer_guidelines.txt`, `sample_invoice.txt`) to observe successful canonical resolution; submit traversal presets (`../restricted/synthetic_server_config.ini`, `..\restricted\synthetic_server_config.ini`, `....//restricted/...`) to see them rejected with HTTP 400. In Vulnerable mode, when the central loopback gate is open, submit traversal sequences to observe access to restricted synthetic fixtures. Attempts to escape the lab fixtures root (e.g. to reach host OS files) are blocked by the hard laboratory boundary in both modes. Real system files are never accessed. See [docs/security-lab/path-traversal.md](docs/security-lab/path-traversal.md).
+
+To exercise Clickjacking, sign in with any synthetic account and open `/security-lab/clickjacking`. In Mitigated mode, observe `X-Frame-Options: DENY` and `CSP: frame-ancestors 'none'` in the live headers table and verify that the browser refuses to render the framed target action. In Vulnerable mode, when the central loopback gate is open, the anti-framing headers are omitted exclusively on `/security-lab/clickjacking/target`, allowing the interactive visualizer and standalone framing test to render the target. Use the opacity slider to observe the decoy button lure ("Claim $100 Freelancer Bonus") overlaying the target action. All unrelated routes permanently retain full anti-framing protections. See [docs/security-lab/clickjacking.md](docs/security-lab/clickjacking.md).
+
 ## Security milestone boundary
 
-Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, and Unrestricted File Upload. The remaining four modules—path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The file upload demonstration is strictly confined to `instance/lab_uploads/`; uploaded files are never executed; and lab-run records store only bounded status values.
+Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, and Clickjacking. The remaining two modules—authentication/session security and security misconfiguration—remain placeholders. All demonstrations operate strictly on bounded synthetic fixtures; real system files and arbitrary OS files are never accessed; and lab-run records store only bounded status values.

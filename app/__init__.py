@@ -68,6 +68,31 @@ def create_app(config_name: str | None = None, test_config: dict | None = None) 
 
     @app.after_request
     def apply_security_headers(response):
+        from .services.security_modes import resolve_effective_mode, vulnerable_mode_gate_open
+
+        is_clickjacking_target = (
+            request.endpoint in {"security_lab.clickjacking_target", "security_lab.clickjacking_target_action"}
+            or request.path == "/security-lab/clickjacking/target"
+        )
+        if (
+            is_clickjacking_target
+            and vulnerable_mode_gate_open()
+            and resolve_effective_mode("clickjacking") == "vulnerable"
+        ):
+            # Educational exception strictly scoped to the Clickjacking demonstration target:
+            # Omit X-Frame-Options and frame-ancestors 'none' when vulnerable mode is gate-approved.
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; base-uri 'self'; object-src 'none'; "
+                "form-action 'self'; script-src 'self'; "
+                "style-src 'self'; img-src 'self' data:",
+            )
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+            response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+            response.headers.pop("X-Frame-Options", None)
+            return response
+
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; base-uri 'self'; object-src 'none'; "
