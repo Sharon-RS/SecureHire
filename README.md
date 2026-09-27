@@ -1,6 +1,6 @@
 # SecureHire
 
-SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 11 adds an isolated Authentication & Session Security demonstration. SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, and Authentication / Session Security have vulnerable and mitigated paths; Security Misconfiguration remains a placeholder.
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 12 adds an isolated Security Misconfiguration demonstration. All 10 planned security modules (SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, Authentication / Session Security, and Security Misconfiguration) have vulnerable and mitigated paths.
 
 ## Technology
 
@@ -123,11 +123,11 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, File Upload, Path Traversal, Clickjacking, and Authentication / Session Security behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
+The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, File Upload, Path Traversal, Clickjacking, Authentication / Session Security, and Security Misconfiguration behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, and Authentication / Session Security demonstrations; the remaining module page is a placeholder.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, Authentication / Session Security, and Security Misconfiguration demonstrations.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
@@ -151,6 +151,8 @@ To exercise Clickjacking, sign in with any synthetic account and open `/security
 
 To exercise Authentication & Session Security, sign in with any synthetic account and open `/security-lab/auth-session`. In Mitigated mode, click "Simulate Consultant Login" to observe secure session rotation, invalidating the pre-auth token; click "Inspect Attacker Token Access" to verify that the pre-login kiosk token cannot access the account (`ACCESS DENIED`). Click "Simulate Consultant Logout" and then "Replay Discarded Session Token" to confirm server-side token revocation. In Vulnerable mode, when the central loopback gate is open, simulate login to observe the absence of session rotation, allowing the attacker holding the pre-auth token to achieve `SIMULATED ACCOUNT TAKEOVER`. Flawed logout leaves the session token active for replay. The demonstration modifies only the synthetic `securehire_demo_session` cookie; the real application session cookie (`session`) permanently maintains `HttpOnly=True` and `SameSite=Lax`. See [docs/security-lab/auth-session.md](docs/security-lab/auth-session.md).
 
+To exercise Security Misconfiguration, sign in with any synthetic account and open `/security-lab/security-misconfiguration`. In Mitigated mode, trigger contract exceptions to observe sanitized generic error responses with opaque incident reference IDs (`INCIDENT-REF-XXXX`) and zero stack traces or environment parameters; click "Open /debug-status Endpoint" to confirm that internal diagnostic telemetry returns `HTTP 403 Forbidden` with revealing headers suppressed. In Vulnerable mode, when the central loopback gate is open, trigger exceptions to observe detailed synthetic stack traces, synthetic internal source paths, disclosed mock environment parameters (`MOCK_DB_DSN`, `MOCK_WORKER_HOST`), and revealing headers (`Server: SecureHire-Synthetic-Lab-Daemon/1.0`, `X-Debug-Mode: Enabled`); querying `/security-lab/security-misconfiguration/debug-status` returns `HTTP 200 OK` with full synthetic infrastructure topology. The diagnostic endpoint remains strictly protected by `@login_required` to preserve the lab access boundary. Real system files, host environment variables, and production database credentials are never accessed. See [docs/security-lab/security-misconfiguration.md](docs/security-lab/security-misconfiguration.md).
+
 ## Security milestone boundary
 
-Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, and Authentication / Session Security. The remaining module—security misconfiguration—remains a placeholder. All demonstrations operate strictly on bounded synthetic fixtures; real system files and arbitrary OS files are never accessed; and lab-run records store only bounded status values.
+Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, Authentication / Session Security, and Security Misconfiguration. All 10 planned security modules are fully implemented with isolated educational demonstrations. All demonstrations operate strictly on bounded synthetic fixtures; real system files and arbitrary OS files are never accessed; and lab-run records store only bounded status values.

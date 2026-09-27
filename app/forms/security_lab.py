@@ -9,6 +9,7 @@ from wtforms.validators import DataRequired, Length, ValidationError
 from ..services.demos.sqli import SAFE_SQLI_PAYLOAD
 from ..services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
 from ..services.demos.reflected_xss import APPROVED_REFLECTED_XSS_PAYLOAD
+from ..services.demos.security_misconfiguration import ERROR_CASES
 
 
 class CsrfFixtureResetForm(FlaskForm):
@@ -164,5 +165,18 @@ class AuthSessionReplayTokenForm(FlaskForm):
 
 class AuthSessionResetForm(FlaskForm):
     submit = SubmitField("Reset Session Scenario")
+
+
+class SecurityMisconfigurationErrorForm(FlaskForm):
+    error_type = SelectField(
+        "Escrow Failure Scenario",
+        choices=list(ERROR_CASES),
+        validators=[DataRequired()],
+    )
+    submit = SubmitField("Trigger Escrow Exception")
+
+
+class SecurityMisconfigurationResetForm(FlaskForm):
+    submit = SubmitField("Reset Misconfiguration Scenario")
 
 

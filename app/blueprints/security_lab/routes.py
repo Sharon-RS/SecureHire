@@ -22,6 +22,8 @@ from ...forms.security_lab import (
     PathTraversalResetForm,
     ReflectedXssSearchForm,
     SQLiSearchForm,
+    SecurityMisconfigurationErrorForm,
+    SecurityMisconfigurationResetForm,
     SecurityModeForm,
     StoredXssDemoForm,
 )
@@ -111,6 +113,20 @@ from ...services.demos.auth_session.mitigated import (
     execute_mitigated_login,
     execute_mitigated_logout,
 )
+from ...services.demos.security_misconfiguration import (
+    ERROR_CASES,
+    MISCONFIG_DEMO_DESCRIPTION,
+    MISCONFIG_DEMO_TITLE,
+)
+from ...services.demos.security_misconfiguration.synthetic_data import SYNTHETIC_LAB_NOTICE
+from ...services.demos.security_misconfiguration.vulnerable import (
+    execute_vulnerable_error,
+    get_vulnerable_debug_status,
+)
+from ...services.demos.security_misconfiguration.mitigated import (
+    execute_mitigated_error,
+    get_mitigated_debug_status,
+)
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -163,6 +179,8 @@ def module_detail(vulnerability_key: str):
         return _render_clickjacking_page(module, state)
     if vulnerability_key == "auth_session":
         return _render_auth_session_page(module, state)
+    if vulnerability_key == "security_misconfiguration":
+        return _render_security_misconfiguration_page(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
 
 
@@ -1215,5 +1233,117 @@ def _render_auth_session_page(
             samesite="Lax",
         )
 
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Security Misconfiguration Demonstration Endpoints (CWE-209, CWE-215, CWE-16)
+# ---------------------------------------------------------------------------
+
+
+@bp.get("/security-misconfiguration")
+@login_required
+def security_misconfiguration_page():
+    module = get_vulnerability("security_misconfiguration")
+    state = get_module_state("security_misconfiguration")
+    return _render_security_misconfiguration_page(module, state)
+
+
+@bp.post("/security-misconfiguration/trigger-error")
+@login_required
+def security_misconfiguration_trigger_error():
+    module = get_vulnerability("security_misconfiguration")
+    state = get_module_state("security_misconfiguration")
+    form = SecurityMisconfigurationErrorForm()
+    if not form.validate_on_submit():
+        flash("Invalid escrow error scenario selected.", "warning")
+        return _render_security_misconfiguration_page(
+            module, state, error_form=form, status_code=400
+        )
+
+    error_type = form.error_type.data or "divide_by_zero"
+    is_vulnerable = state["effective_mode"] == "vulnerable"
+
+    if is_vulnerable:
+        result = execute_vulnerable_error(error_type)
+    else:
+        result = execute_mitigated_error(error_type)
+
+    run_result = "passed" if is_vulnerable else "blocked"
+    record_lab_run("security_misconfiguration", run_result)
+
+    return _render_security_misconfiguration_page(
+        module,
+        state,
+        error_form=form,
+        error_result=result,
+        status_code=result.status_code,
+    )
+
+
+@bp.get("/security-misconfiguration/debug-status")
+@login_required
+def security_misconfiguration_debug_status():
+    """Diagnostic status endpoint demonstrating CWE-215 exposure vs mitigation.
+
+    CRITICAL AUTH BOUNDARY: Preserves @login_required lab access control.
+    Diagnostic exposure is demonstrated only after the normal lab access check succeeds.
+    """
+    state = get_module_state("security_misconfiguration")
+    is_vulnerable = state["effective_mode"] == "vulnerable"
+
+    if is_vulnerable:
+        debug_result = get_vulnerable_debug_status()
+    else:
+        debug_result = get_mitigated_debug_status()
+
+    run_result = "passed" if is_vulnerable else "blocked"
+    record_lab_run("security_misconfiguration", run_result)
+
+    response = make_response(debug_result.status_data, debug_result.status_code)
+    for header, value in debug_result.headers.items():
+        response.headers[header] = value
+    return response
+
+
+@bp.post("/security-misconfiguration/reset")
+@login_required
+def security_misconfiguration_reset():
+    flash("Security misconfiguration demonstration reset.", "info")
+    return redirect(url_for("security_lab.security_misconfiguration_page"))
+
+
+def _render_security_misconfiguration_page(
+    module,
+    state,
+    error_form=None,
+    reset_form=None,
+    error_result=None,
+    status_code=200,
+):
+    """Render the Security Misconfiguration demonstration template."""
+    if error_form is None:
+        error_form = SecurityMisconfigurationErrorForm()
+    if reset_form is None:
+        reset_form = SecurityMisconfigurationResetForm()
+
+    response = make_response(
+        render_template(
+            "security_lab/security_misconfiguration.html",
+            module=module,
+            state=state,
+            error_form=error_form,
+            reset_form=reset_form,
+            error_result=error_result,
+            error_cases=ERROR_CASES,
+            demo_title=MISCONFIG_DEMO_TITLE,
+            demo_description=MISCONFIG_DEMO_DESCRIPTION,
+            synthetic_notice=SYNTHETIC_LAB_NOTICE,
+        ),
+        status_code,
+    )
+    if state["effective_mode"] == "vulnerable" and error_result and error_result.is_verbose:
+        response.headers["Server"] = "SecureHire-Synthetic-Lab-Daemon/1.0"
+        response.headers["X-Debug-Mode"] = "Enabled"
     return response
 

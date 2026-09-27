@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Security Misconfiguration Lab | SecureHire{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">
+    Verbose error disclosure (CWE-209), exposed internal diagnostic endpoint (CWE-215), and revealing default headers (CWE-16) are active.
+    In accordance with SecureHire safety rules, all disclosures use purely synthetic mock fixtures; no real host secrets or OS files are accessed, and all normal application error handlers outside this lab remain fully protected.
+  </p>
+</div>
+{% endif %}
+
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">Security Misconfiguration (CWE-209 / CWE-215 / CWE-16)</h1>
+    <p class="lead text-secondary">
+      Security misconfiguration occurs when web applications or runtime environments run with overly permissive default settings, expose unhardened diagnostic endpoints, disclose internal stack traces in response to unhandled exceptions, or advertise framework versions through response headers.
+    </p>
+
+    <div class="alert alert-info py-2 small d-flex align-items-center mb-4">
+      <span class="fw-semibold me-2">&#9432; Lab Safety Notice:</span>
+      <span>{{ synthetic_notice }}</span>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="alert alert-light border mb-4" aria-labelledby="concepts-heading">
+      <p class="eyebrow mb-1">EDUCATIONAL OVERVIEW</p>
+      <h2 class="h5" id="concepts-heading">Three core facets of application misconfiguration</h2>
+      <ul class="small mb-0">
+        <li><strong>Verbose Error Messages (CWE-209):</strong> Uncaught exceptions disclose internal source file paths, variable names, database queries, and stack traces directly to the client, providing attackers with detailed blueprints of internal software architecture.</li>
+        <li><strong>Exposed Diagnostic / Debug Endpoints (CWE-215):</strong> Internal health, metric, or status endpoints (such as <code>/debug-status</code> or framework consoles) left accessible to clients expose internal topology, connection parameters, and infrastructure layout.</li>
+        <li><strong>Insecure Default Server Headers (CWE-16):</strong> Leaving default <code>Server</code> and <code>X-Powered-By</code> banners advertises exact software versions, assisting attackers in targeting known CVE vulnerabilities.</li>
+      </ul>
+    </section>
+
+    <!-- Interactive Demonstration: Escrow Error Trigger -->
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="escrow-error-heading">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <p class="eyebrow mb-0">INTERACTIVE DEMONSTRATION</p>
+        <form method="post" action="{{ url_for('security_lab.security_misconfiguration_reset') }}" class="d-inline">
+          {{ reset_form.hidden_tag() }}
+          <button type="submit" class="btn btn-outline-secondary btn-sm">Reset demonstration</button>
+        </form>
+      </div>
+      <h2 class="h5" id="escrow-error-heading">Part 1: Unhandled Escrow Gateway Exception (CWE-209)</h2>
+      <p class="text-secondary small mb-3">
+        Simulate an unhandled runtime failure inside the freelance escrow contract calculation engine.
+        Observe how the response differs between vulnerable mode (detailed synthetic stack trace and environment dump) and mitigated mode (generic sanitized error with opaque correlation reference).
+      </p>
+
+      <form method="post" action="{{ url_for('security_lab.security_misconfiguration_trigger_error') }}" class="mb-4">
+        {{ error_form.hidden_tag() }}
+        <div class="mb-3">
+          <label for="error_type" class="form-label fw-semibold small">{{ error_form.error_type.label.text }}</label>
+          {{ error_form.error_type(class="form-select", id="error_type") }}
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Trigger Escrow Exception</button>
+      </form>
+
+      {% if error_result %}
+      <div class="border rounded p-3 bg-light" id="error-simulation-output">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span class="badge text-bg-danger fs-6">HTTP {{ error_result.status_code }}</span>
+          <span class="small text-muted font-monospace">Incident ID: {{ error_result.incident_id }}</span>
+        </div>
+
+        <div class="alert {% if error_result.is_verbose %}alert-danger{% else %}alert-success{% endif %} py-2 mb-3">
+          <strong>{{ error_result.classification }}</strong>
+        </div>
+
+        <h3 class="h6 fw-bold mb-2">{{ error_result.error_title }}</h3>
+        <p class="text-secondary small mb-3">{{ error_result.error_message }}</p>
+
+        {% if error_result.is_verbose and error_result.synthetic_stack_trace %}
+        <!-- Disclosed Insecure Headers -->
+        <div class="mb-3">
+          <p class="fw-semibold small text-danger mb-1">Disclosed Response Headers (CWE-16):</p>
+          <div class="font-monospace small bg-white border rounded p-2 text-danger">
+            <div>Server: SecureHire-Synthetic-Lab-Daemon/1.0</div>
+            <div>X-Debug-Mode: Enabled</div>
+          </div>
+        </div>
+
+        <!-- Disclosed Synthetic Stack Trace -->
+        <div class="mb-3">
+          <p class="fw-semibold small text-danger mb-1">Disclosed Internal Stack Trace (CWE-209):</p>
+          <pre class="bg-dark text-light p-3 rounded font-monospace small mb-0 overflow-x-auto"><code>{% for line in error_result.synthetic_stack_trace %}{{ line }}
+{% endfor %}</code></pre>
+        </div>
+
+        <!-- Disclosed Synthetic Environment Information -->
+        {% if error_result.synthetic_env_info %}
+        <div>
+          <p class="fw-semibold small text-danger mb-1">Disclosed Synthetic Environment Parameters:</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered bg-white small mb-0 font-monospace">
+              <thead class="table-light">
+                <tr><th>Parameter</th><th>Synthetic Disclosed Value</th></tr>
+              </thead>
+              <tbody>
+                {% for key, val in error_result.synthetic_env_info.items() %}
+                <tr>
+                  <td class="text-nowrap fw-semibold">{{ key }}</td>
+                  <td class="text-break text-danger">{{ val }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <!-- Sanitized Mitigated Display -->
+        <div class="bg-white border rounded p-3 text-secondary small">
+          <p class="fw-semibold text-success mb-1">&#10003; Sanitized Client Response:</p>
+          <p class="mb-2">No stack trace, source file path, internal variable, or database connection string was returned in the response.</p>
+          <div class="font-monospace text-muted">
+            Incident Correlation Reference: <strong>{{ error_result.incident_id }}</strong>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- Part 2: Diagnostic / Debug Status Endpoint -->
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="debug-endpoint-heading">
+      <p class="eyebrow mb-1">INTERACTIVE DEMONSTRATION</p>
+      <h2 class="h5" id="debug-endpoint-heading">Part 2: Internal Diagnostic Status Endpoint (CWE-215 / CWE-16)</h2>
+      <p class="text-secondary small mb-3">
+        Examine how internal diagnostic endpoints leak infrastructure topology when improperly exposed.
+        The diagnostic endpoint (<code>/security-lab/security-misconfiguration/debug-status</code>) resides within the Security Lab authentication boundary (requires login).
+      </p>
+
+      <div class="card bg-light border mb-3">
+        <div class="card-body">
+          <h3 class="h6 fw-bold mb-2">Diagnostic Target: <code>GET /security-lab/security-misconfiguration/debug-status</code></h3>
+          <p class="small text-muted mb-3">
+            In <strong>Vulnerable</strong> mode, querying this endpoint returns <code>HTTP 200 OK</code> with synthetic internal topology, mock connection strings, and debug response headers.
+            In <strong>Mitigated</strong> mode, diagnostic access is disabled, returning <code>HTTP 403 Forbidden</code> with no revealing headers.
+          </p>
+          <a href="{{ url_for('security_lab.security_misconfiguration_debug_status') }}" target="_blank" class="btn btn-outline-primary btn-sm">
+            Open /debug-status Endpoint &#8599;
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Educational Mitigation Reference -->
+    <section class="border-top pt-4" aria-labelledby="mitigation-heading">
+      <h2 class="h5" id="mitigation-heading">Defensive Mitigation Guidelines</h2>
+      <div class="row g-3 small">
+        <div class="col-md-4">
+          <div class="border rounded p-3 h-100 bg-light">
+            <h3 class="h6 fw-bold text-success mb-1">&#10003; Sanitize Errors</h3>
+            <p class="text-secondary mb-0">Never send tracebacks, internal file paths, or SQL queries to end users. Log details server-side with an opaque correlation ID and return generic user-friendly messages.</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="border rounded p-3 h-100 bg-light">
+            <h3 class="h6 fw-bold text-success mb-1">&#10003; Disable Debug Endpoints</h3>
+            <p class="text-secondary mb-0">Disable debug mode, interactive consoles, and internal telemetry routes in production environments. Restrict diagnostic endpoints behind strict network or admin controls.</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="border rounded p-3 h-100 bg-light">
+            <h3 class="h6 fw-bold text-success mb-1">&#10003; Strip Server Banners</h3>
+            <p class="text-secondary mb-0">Suppress or sanitize <code>Server</code> and <code>X-Powered-By</code> response headers so external reconnaissance cannot trivially determine specific framework versions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div></article>
+</div></div>
+{% endblock %}
