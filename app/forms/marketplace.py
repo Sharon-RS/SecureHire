@@ -45,3 +45,18 @@ class ProposalDecisionForm(FlaskForm):
 
 class CloseGigForm(FlaskForm):
     submit = SubmitField("Close gig")
+
+
+class ReviewForm(FlaskForm):
+    rating = SelectField(
+        "Rating",
+        choices=[(str(value), f"{value} out of 5 stars") for value in range(1, 6)],
+        coerce=int,
+        validators=[DataRequired(), NumberRange(min=1, max=5)],
+    )
+    body = TextAreaField(
+        "Your review",
+        validators=[DataRequired(), Length(min=3, max=1200)],
+        render_kw={"rows": 5, "maxlength": 1200},
+    )
+    submit = SubmitField("Publish review")

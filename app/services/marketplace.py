@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
-from ..models import Gig, Proposal
+from ..models import Gig, Proposal, Review
 
 
 class MarketplaceError(Exception):
@@ -108,3 +108,52 @@ def close_gig(gig: Gig) -> None:
         raise MarketplaceError("This gig is already closed.")
     locked_gig.status = "closed"
     db.session.commit()
+
+
+
+def submit_review(
+    proposal_id: int,
+    reviewer_id: int,
+    *,
+    rating: int,
+    body: str,
+) -> Review:
+    """Create one review by a participant in an accepted synthetic interaction."""
+    proposal = (
+        db.session.query(Proposal)
+        .filter_by(id=proposal_id)
+        .with_for_update()
+        .first()
+    )
+    if proposal is None or proposal.status != "accepted":
+        raise MarketplaceError("Only an accepted proposal can be reviewed.")
+
+    if reviewer_id == proposal.gig.owner_id:
+        reviewee_id = proposal.freelancer_id
+    elif reviewer_id == proposal.freelancer_id:
+        reviewee_id = proposal.gig.owner_id
+    else:
+        raise MarketplaceError("Only participants in this interaction can submit a review.")
+
+    normalized_body = body.strip()
+    if reviewer_id == reviewee_id:
+        raise MarketplaceError("You cannot review yourself.")
+    if not isinstance(rating, int) or rating not in range(1, 6):
+        raise MarketplaceError("Choose a rating from 1 to 5.")
+    if len(normalized_body) < 3 or len(normalized_body) > 1200:
+        raise MarketplaceError("Review text must be between 3 and 1200 characters.")
+
+    review = Review(
+        proposal_id=proposal.id,
+        reviewer_id=reviewer_id,
+        reviewee_id=reviewee_id,
+        rating=rating,
+        body=normalized_body,
+    )
+    db.session.add(review)
+    try:
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        raise MarketplaceError("You have already reviewed this interaction.") from exc
+    return review

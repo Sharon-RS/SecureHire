@@ -1,6 +1,6 @@
 # SecureHire
 
-SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. This milestone implements an isolated SQL Injection demonstration with vulnerable and mitigated search paths; the other nine vulnerability modules remain placeholders.
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 4 adds an isolated Stored XSS demonstration and normal marketplace reviews. SQL Injection and Stored XSS have vulnerable and mitigated paths; the other eight vulnerability modules remain placeholders.
 
 ## Technology
 
@@ -20,6 +20,8 @@ SecureHire is a localhost-only academic freelance marketplace with a Security La
 - Buyers can create, edit, and close their own gigs.
 - Freelancers can search open gigs and submit one proposal per gig.
 - Gig owners can review proposals and accept or reject a pending proposal.
+- Participants in an accepted proposal can publish one public review of the other participant.
+- Review identity and authorization are derived server-side; review text is always automatically escaped.
 - Proposal details are visible only to the submitting Freelancer and the gig owner.
 - Authorization is enforced on the server for every private resource and state change.
 
@@ -120,18 +122,20 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers the marketplace and Security Lab defaults, SQLi mode gates and query behavior, read-only fixture scope, normal marketplace isolation, CSRF, authorization, and payload-free lab-run records.
+The test suite covers normal reviews, marketplace isolation, SQLi and Stored XSS behavior, vulnerable-mode gates, authorization, CSRF, security headers, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the read-only SQL Injection demonstration; the remaining module pages are placeholders.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection and Stored XSS demonstrations; the other module pages are placeholders.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
-`LAB_ENABLE=false` is the default. A stored vulnerable setting remains effectively mitigated unless the server configuration explicitly enables the flag, the app environment is development or testing, and the accepted socket peer is loopback. Host and proxy headers do not establish locality. Changing the setting requires an authenticated admin, a valid server-validated mode, and a CSRF token.
+`LAB_ENABLE=false` is the default. A stored vulnerable setting remains effectively mitigated unless the server configuration explicitly enables the flag, the app environment is development or testing, and the accepted socket peer is loopback. Host, query, form, cookie, and proxy headers do not establish locality or select mode. Changing the setting requires an authenticated admin, a valid server-validated mode, and a CSRF token.
 
-To exercise the SQL Injection demonstration locally, set LAB_ENABLE=true in the local .env, restart the server, and select Vulnerable for SQLi in the admin dashboard. The demonstration uses only the dedicated synthetic fixture table and the approved harmless input. Return SQLi to Mitigated when finished. See docs/security-lab/sql-injection.md for the behavior, isolation, evidence, and tests.
+To exercise SQL Injection, set `LAB_ENABLE=true` in the local `.env`, restart the server, select Vulnerable for SQLi, and open its demonstration page. It uses only the dedicated synthetic fixture table and the approved harmless input. Return SQLi to Mitigated when finished. See [docs/security-lab/sql-injection.md](docs/security-lab/sql-injection.md).
+
+To exercise Stored XSS, select Vulnerable for Stored XSS and open `/security-lab/stored-xss`. Submit the exact harmless value shown on the page; in effectively vulnerable mode, the isolated lab result displays the local alert. Set Stored XSS to Mitigated and reload to see the same stored value displayed as text. Normal marketplace reviews remain escaped in either mode. Set the stored mode back to Mitigated and `LAB_ENABLE=false` when finished. See [docs/security-lab/stored-xss.md](docs/security-lab/stored-xss.md) for isolation, behavior, evidence, and test coverage.
 
 ## Security milestone boundary
 
-SQL Injection is the only implemented vulnerability demonstration. The other nine modules—stored and reflected XSS, IDOR/BOLA, CSRF, file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The Security Lab administration interface retains CSRF protection independently of the CSRF demonstration. Lab run records accept only bounded status values and do not store request payloads.
+Implemented demonstrations: SQL Injection and Stored XSS. The remaining eight modules—reflected XSS, IDOR/BOLA, CSRF, file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The Security Lab administration interface retains CSRF protection independently of the CSRF demonstration. Lab run records accept only bounded status values and do not store request payloads.

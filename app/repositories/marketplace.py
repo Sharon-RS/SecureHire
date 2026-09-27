@@ -2,7 +2,7 @@
 
 from sqlalchemy import or_
 
-from ..models import Gig, Proposal
+from ..models import Gig, Proposal, Review
 
 
 def find_gig(gig_id: int) -> Gig | None:
@@ -39,5 +39,21 @@ def proposals_for_freelancer(freelancer_id: int) -> list[Proposal]:
     return (
         Proposal.query.filter_by(freelancer_id=freelancer_id)
         .order_by(Proposal.created_at.desc(), Proposal.id.desc())
+        .all()
+    )
+
+
+
+def find_review_for_reviewer(proposal_id: int, reviewer_id: int) -> Review | None:
+    return Review.query.filter_by(
+        proposal_id=proposal_id, reviewer_id=reviewer_id
+    ).one_or_none()
+
+
+def reviews_for_gig(gig_id: int) -> list[Review]:
+    return (
+        Review.query.join(Proposal)
+        .filter(Proposal.gig_id == gig_id)
+        .order_by(Review.created_at.desc(), Review.id.desc())
         .all()
     )

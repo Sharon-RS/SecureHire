@@ -12,6 +12,23 @@
       <div class="d-flex flex-wrap gap-4"><div><span class="detail-label">Project budget</span><strong class="d-block fs-5">${{ "%.2f"|format(gig.budget) }}</strong></div><div><span class="detail-label">Posted</span><strong class="d-block">{{ gig.created_at.strftime("%b %d, %Y") }}</strong></div></div>
       <div class="owner-summary mt-4"><div class="profile-monogram profile-monogram-sm">{{ gig.owner.profile.display_name[:1]|upper }}</div><div><span class="detail-label">Posted by</span><a class="fw-semibold d-block" href="{{ url_for('auth.public_profile', user_id=gig.owner.id) }}">{{ gig.owner.profile.display_name }}</a></div></div>
     </div>
+    <section class="detail-card card-surface mt-4" aria-labelledby="marketplace-reviews">
+      <h2 class="h5 mb-3" id="marketplace-reviews">Marketplace reviews</h2>
+      {% if reviews %}
+        {% for review in reviews %}
+        <article class="border-top pt-3 mt-3">
+          <div class="d-flex justify-content-between gap-3">
+            <h3 class="h6 mb-1">{{ review.reviewer.profile.display_name }}</h3>
+            <span class="text-nowrap">{{ review.rating }}/5 stars</span>
+          </div>
+          <p class="small text-secondary mb-2">For {{ review.reviewee.profile.display_name }}</p>
+          <p class="preserve-lines mb-0">{{ review.body }}</p>
+        </article>
+        {% endfor %}
+      {% else %}
+        <p class="text-secondary mb-0">No reviews have been published for this gig yet.</p>
+      {% endif %}
+    </section>
   </div>
   <aside class="col-lg-4"><div class="action-card card-surface">
     <p class="eyebrow mb-2">Next step</p>

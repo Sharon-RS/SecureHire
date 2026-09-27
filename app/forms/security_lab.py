@@ -3,10 +3,11 @@
 import re
 
 from flask_wtf import FlaskForm
-from wtforms import SelectField, StringField, SubmitField
+from wtforms import SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Length, ValidationError
 
 from ..services.demos.sqli import SAFE_SQLI_PAYLOAD
+from ..services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
 
 
 class SecurityModeForm(FlaskForm):
@@ -34,3 +35,18 @@ class SQLiSearchForm(FlaskForm):
         render_kw={"maxlength": 80, "autocomplete": "off"},
     )
     submit = SubmitField("Run local search")
+
+
+def validate_stored_xss_demo_value(_form, field):
+    """Accept only the approved harmless local proof of concept."""
+    if field.data != APPROVED_STORED_XSS_PAYLOAD:
+        raise ValidationError("Use the approved harmless Stored XSS demonstration value.")
+
+
+class StoredXssDemoForm(FlaskForm):
+    payload = TextAreaField(
+        "Demonstration input",
+        validators=[DataRequired(), Length(max=200), validate_stored_xss_demo_value],
+        render_kw={"rows": 3, "maxlength": 200, "spellcheck": "false"},
+    )
+    submit = SubmitField("Submit Demo")

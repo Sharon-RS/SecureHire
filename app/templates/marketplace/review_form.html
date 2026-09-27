@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Review interaction{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <a class="small text-secondary text-decoration-none" href="{{ url_for('marketplace.proposal_detail', proposal_id=proposal.id) }}">&larr; Back to accepted proposal</a>
+    <article class="detail-card card-surface mt-3">
+      <p class="eyebrow">Marketplace feedback</p>
+      <h1 class="h3">Review {{ reviewee.profile.display_name }}</h1>
+      <p class="text-secondary">Your review is attached to the accepted interaction for {{ proposal.gig.title }}.</p>
+      <form method="post" action="{{ url_for('marketplace.write_review', proposal_id=proposal.id) }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          {{ form.rating.label(class_="form-label fw-semibold") }}
+          {{ form.rating(class_="form-select") }}
+          {% for error in form.rating.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+          {{ form.body.label(class_="form-label fw-semibold") }}
+          {{ form.body(class_="form-control") }}
+          {% for error in form.body.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          <div class="form-text">Review text is displayed as text on the marketplace.</div>
+        </div>
+        {{ form.submit(class_="btn btn-primary") }}
+      </form>
+    </article>
+  </div>
+</div>
+{% endblock %}

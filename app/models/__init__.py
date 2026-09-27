@@ -32,6 +32,18 @@ class User(UserMixin, db.Model):
     proposals = db.relationship(
         "Proposal", back_populates="freelancer", cascade="all, delete-orphan"
     )
+    reviews_written = db.relationship(
+        "Review",
+        back_populates="reviewer",
+        foreign_keys="Review.reviewer_id",
+        cascade="all, delete-orphan",
+    )
+    reviews_received = db.relationship(
+        "Review", back_populates="reviewee", foreign_keys="Review.reviewee_id"
+    )
+    stored_xss_demo = db.relationship(
+        "StoredXssDemoEntry", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
     security_modes_updated = db.relationship(
         "SecurityMode", back_populates="updated_by_user", foreign_keys="SecurityMode.updated_by"
     )
@@ -143,6 +155,72 @@ class Proposal(db.Model):
 
     gig = db.relationship("Gig", back_populates="proposals")
     freelancer = db.relationship("User", back_populates="proposals")
+    reviews = db.relationship(
+        "Review", back_populates="proposal", cascade="all, delete-orphan"
+    )
+
+
+
+
+class Review(db.Model):
+    """Public marketplace feedback tied to an accepted proposal interaction."""
+
+    __tablename__ = "reviews"
+    __table_args__ = (
+        CheckConstraint("rating >= 1 AND rating <= 5", name="ck_reviews_rating_range"),
+        UniqueConstraint("proposal_id", "reviewer_id", name="uq_reviews_proposal_reviewer"),
+        db.Index("ix_reviews_reviewee_created", "reviewee_id", "created_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    proposal_id = db.Column(
+        db.Integer, db.ForeignKey("proposals.id", ondelete="CASCADE"), nullable=False
+    )
+    reviewer_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    reviewee_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    rating = db.Column(db.Integer, nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    proposal = db.relationship("Proposal", back_populates="reviews")
+    reviewer = db.relationship(
+        "User", foreign_keys=[reviewer_id], back_populates="reviews_written"
+    )
+    reviewee = db.relationship(
+        "User", foreign_keys=[reviewee_id], back_populates="reviews_received"
+    )
+
+
+class StoredXssDemoEntry(db.Model):
+    """One per-user stored proof-of-concept value for the isolated Security Lab page."""
+
+    __tablename__ = "stored_xss_demo_entries"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_stored_xss_demo_user"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    payload = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user = db.relationship("User", back_populates="stored_xss_demo")
 
 
 class SecurityMode(db.Model):

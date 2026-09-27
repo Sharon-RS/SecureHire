@@ -1,15 +1,19 @@
 """Authenticated Security Lab dashboard, SQLi demo, and placeholders."""
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ...extensions import db
-from ...forms.security_lab import SQLiSearchForm, SecurityModeForm
+from ...forms.security_lab import SQLiSearchForm, SecurityModeForm, StoredXssDemoForm
 from ...models import LabGigFixture
 from ...services.authorization import roles_required
 from ...services.demos.sqli import MAX_RESULTS, SAFE_SQLI_PAYLOAD
 from ...services.demos.sqli.mitigated import search_gigs_mitigated
 from ...services.demos.sqli.vulnerable import search_gigs_vulnerable
+from ...services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
+from ...services.demos.stored_xss.mitigated import render_mitigated_demo_value
+from ...services.demos.stored_xss.records import store_demo_value, stored_demo_for_user
+from ...services.demos.stored_xss.vulnerable import render_vulnerable_demo_value
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -46,7 +50,17 @@ def module_detail(vulnerability_key: str):
         abort(404)
     if vulnerability_key == "sqli":
         return _sqli_demonstration(module, state)
+    if vulnerability_key == "stored_xss":
+        return _stored_xss_demonstration(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
+
+
+@bp.get("/stored-xss")
+@login_required
+def stored_xss_page():
+    """Canonical hyphenated URL for the Stored XSS demonstration page."""
+    return module_detail("stored_xss")
+
 
 @bp.post("/sqli")
 @login_required
@@ -56,6 +70,30 @@ def sqli_search():
     state = get_module_state("sqli")
     return _sqli_demonstration(module, state)
 
+
+
+
+
+
+@bp.post("/stored-xss")
+@login_required
+def stored_xss_submit():
+    """Store only the approved per-user lab fixture and record a bounded result."""
+    module = get_vulnerability("stored_xss")
+    state = get_module_state("stored_xss")
+    form = StoredXssDemoForm()
+    if not form.validate_on_submit():
+        response = _stored_xss_demonstration(module, state, form=form)
+        response.status_code = 400
+        return response
+
+    try:
+        store_demo_value(current_user.id, form.payload.data)
+    except ValueError:
+        abort(400)
+    record_lab_run("stored_xss", "passed")
+    flash("The local Stored XSS demo value was stored.", "success")
+    return redirect(url_for("security_lab.stored_xss_page"))
 
 
 @bp.post("/<string:vulnerability_key>/mode")
@@ -163,3 +201,54 @@ def _sqli_demonstration(module, state):
         max_results=MAX_RESULTS,
         safe_payload=SAFE_SQLI_PAYLOAD,
     )
+
+
+STORED_XSS_VULNERABLE_CSP = (
+    "default-src 'self'; base-uri 'self'; object-src 'none'; "
+    "frame-ancestors 'none'; form-action 'self'; "
+    "script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:"
+)
+
+
+def _stored_xss_demonstration(module, state, form=None):
+    """Render the current user's stored lab record through the selected isolated path."""
+    entry = stored_demo_for_user(current_user.id)
+    if form is None:
+        form = StoredXssDemoForm()
+        form.payload.data = entry.payload if entry else APPROVED_STORED_XSS_PAYLOAD
+
+    rendered_value = None
+    explanation = None
+    vulnerable = state["effective_mode"] == "vulnerable"
+    if entry is not None:
+        if vulnerable and entry.payload == APPROVED_STORED_XSS_PAYLOAD:
+            rendered_value = render_vulnerable_demo_value(entry.payload)
+            explanation = (
+                "The lab deliberately marked the approved stored value as HTML. The browser "
+                "interprets the script element and shows the harmless alert."
+            )
+        else:
+            rendered_value = render_mitigated_demo_value(entry.payload)
+            explanation = (
+                "The server HTML-escaped the stored value for this text-node context. The browser "
+                "displays the markup as text instead of creating a script element. Only the exact "
+                "approved fixture is eligible for vulnerable rendering."
+            )
+
+    response = make_response(
+        render_template(
+            "security_lab/stored_xss.html",
+            module=module,
+            state=state,
+            form=form,
+            entry=entry,
+            rendered_value=rendered_value,
+            explanation=explanation,
+            approved_payload=APPROVED_STORED_XSS_PAYLOAD,
+        )
+    )
+    if vulnerable and entry is not None and entry.payload == APPROVED_STORED_XSS_PAYLOAD:
+        # Page-specific exception exists only to make the exact local proof of concept execute.
+        # Output encoding remains the mitigation; CSP is defense in depth, not the solution.
+        response.headers["Content-Security-Policy"] = STORED_XSS_VULNERABLE_CSP
+    return response

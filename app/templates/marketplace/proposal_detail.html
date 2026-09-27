@@ -8,6 +8,14 @@
     <p class="text-secondary">Submitted {{ proposal.created_at.strftime("%b %d, %Y") }} by <a href="{{ url_for('auth.public_profile', user_id=proposal.freelancer.id) }}">{{ proposal.freelancer.profile.display_name }}</a></p>
     <h2 class="h6 mt-4">Cover letter</h2><p class="preserve-lines">{{ proposal.cover_letter }}</p>
     <div class="row g-3 mt-2"><div class="col-sm-6"><div class="metric-card"><span class="metric-label">Proposed price</span><strong>${{ "%.2f"|format(proposal.proposed_price) }}</strong></div></div><div class="col-sm-6"><div class="metric-card"><span class="metric-label">Estimated timeline</span><strong>{{ proposal.timeline }}</strong></div></div></div>
+    {% if proposal.status == "accepted" %}
+      <hr class="my-4">
+      {% if my_review %}
+        <p class="alert alert-success mb-0">You have reviewed this accepted interaction.</p>
+      {% else %}
+        <a class="btn btn-outline-primary mt-3" href="{{ url_for('marketplace.write_review', proposal_id=proposal.id) }}">Write a review</a>
+      {% endif %}
+    {% endif %}
     {% if owner_view and proposal.status == "pending" and proposal.gig.status == "open" %}
       <hr class="my-4"><h2 class="h6">Update proposal</h2><form class="decision-inline" method="post" action="{{ url_for('marketplace.decide_proposal', proposal_id=proposal.id) }}">{{ decision_form.hidden_tag() }}{{ decision_form.decision(class="form-select") }}<button class="btn btn-accent" type="submit">Save decision</button></form>
     {% endif %}

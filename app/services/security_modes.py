@@ -32,8 +32,8 @@ VULNERABILITIES = (
     VulnerabilityModule(
         "stored_xss",
         "Stored XSS",
-        "Explains how saved user content can become active when rendered unsafely.",
-        "Keep template autoescaping enabled and sanitize only explicitly supported rich text.",
+        "Shows how stored marketplace reviews can become executable markup when output is unsafe.",
+        "HTML-escape review text in its output context and keep Jinja autoescaping enabled.",
     ),
     VulnerabilityModule(
         "reflected_xss",

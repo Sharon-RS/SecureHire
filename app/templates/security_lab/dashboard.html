@@ -10,7 +10,7 @@
 </div>
 {% endif %}
 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-4">
-  <div><p class="eyebrow mb-1">Administrator controls</p><h1 class="h2 mb-2">Security Lab</h1><p class="text-secondary mb-0">Review effective protection and stored settings for each planned module. Demonstrations are not implemented in this milestone.</p></div>
+  <div><p class="eyebrow mb-1">Administrator controls</p><h1 class="h2 mb-2">Security Lab</h1><p class="text-secondary mb-0">Review effective protection and stored settings. SQL Injection and Stored XSS have isolated demonstrations; the other planned modules remain placeholders.</p></div>
   <span class="badge text-bg-success fs-6">Local application</span>
 </div>
 <div class="alert alert-info" role="status">Vulnerable mode can take effect only when the server lab flag is explicitly enabled, the application is nonproduction, the socket peer is loopback, and that module's stored setting is vulnerable. Otherwise the effective mode is MITIGATED.</div>
@@ -34,7 +34,7 @@
           <p class="small mb-0">{{ module.mitigation }}</p>
         </div>
         <div class="mt-auto d-grid gap-2">
-          <a class="btn btn-outline-primary" href="{{ url_for('security_lab.module_detail', vulnerability_key=module.key) }}">Open demo placeholder</a>
+          <a class="btn btn-outline-primary" href="{% if module.key == 'stored_xss' %}{{ url_for('security_lab.stored_xss_page') }}{% else %}{{ url_for('security_lab.module_detail', vulnerability_key=module.key) }}{% endif %}">{% if module.key in ['sqli', 'stored_xss'] %}Open demonstration{% else %}Open demo placeholder{% endif %}</a>
           <form method="post" action="{{ url_for('security_lab.change_mode', vulnerability_key=module.key) }}">
             {{ mode_form.hidden_tag() }}
             <label class="form-label small mb-1" for="mode-{{ module.key }}">Stored mode</label>

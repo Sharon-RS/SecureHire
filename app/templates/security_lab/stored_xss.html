@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ module.name }}{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">This page can run only with the server-side lab gate open and the accepted connection coming from loopback.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+
+<div class="row justify-content-center mt-3">
+  <div class="col-xl-9">
+    <article class="card shadow-sm mb-4">
+      <div class="card-body p-4 p-lg-5">
+        <p class="eyebrow">Security demonstration</p>
+        <h1 class="h2">Stored XSS</h1>
+        <p class="lead text-secondary">Stored Cross-Site Scripting happens when attacker-controlled content is saved and later returned as executable markup.</p>
+        <p>Because stored content can be viewed repeatedly, unsafe rendering can affect each viewer of the affected page. This lab keeps one approved harmless value per synthetic signed-in user and never places it on marketplace pages.</p>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+          <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+        </div>
+
+        <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="attack-input-heading">
+          <p class="eyebrow mb-1">ATTACK INPUT</p>
+          <h2 class="h5" id="attack-input-heading">Store the harmless proof of concept</h2>
+          <p class="text-secondary">The form accepts only the exact approved local payload. It contains no external requests, redirects, data access, or system commands.</p>
+          <form method="post" action="{{ url_for('security_lab.stored_xss_submit') }}">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+              {{ form.payload.label(class_="form-label fw-semibold") }}
+              {{ form.payload(class_="form-control") }}
+              {% for error in form.payload.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            {{ form.submit(class_="btn btn-primary") }}
+          </form>
+          <p class="small text-secondary mt-3 mb-0">Approved input: <code>{{ approved_payload }}</code></p>
+        </section>
+
+        <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="result-heading">
+          <p class="eyebrow mb-1">RESULT</p>
+          <h2 class="h5" id="result-heading">Rendered stored value</h2>
+          {% if entry %}
+            <div class="p-3 bg-light rounded" id="stored-xss-result">{{ rendered_value }}</div>
+            <p class="mt-3 mb-0">{{ explanation }}</p>
+          {% else %}
+            <p class="text-secondary mb-0">Submit the approved value to store it for this synthetic account and compare rendering modes.</p>
+          {% endif %}
+        </section>
+
+        <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+          <p class="eyebrow mb-1">MITIGATION</p>
+          <h2 class="h5" id="mitigation-heading">Encode for the output context</h2>
+          <p class="mb-2">Mitigated mode applies server-side HTML escaping before the value reaches this HTML text node. Characters such as less-than and greater-than become text entities, so the browser does not build a script element. Legitimate review text remains readable, and ordinary markup is treated as text.</p>
+          <p class="small text-secondary mb-0">This page-specific lab CSP permits inline script only while the approved value is rendered in effectively vulnerable mode. CSP is defense in depth; output encoding is the primary mitigation. Normal marketplace review pages retain their strict default CSP and automatic template escaping.</p>
+        </section>
+      </div>
+    </article>
+  </div>
+</div>
+{% endblock %}

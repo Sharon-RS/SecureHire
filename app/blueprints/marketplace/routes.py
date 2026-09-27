@@ -11,6 +11,7 @@ from ...forms.marketplace import (
     GigForm,
     ProposalDecisionForm,
     ProposalForm,
+    ReviewForm,
 )
 from ...models import Gig, Proposal
 from ...repositories.marketplace import (
@@ -19,6 +20,8 @@ from ...repositories.marketplace import (
     proposals_for_gig,
     proposals_for_freelancer,
     search_open_gigs,
+    find_review_for_reviewer,
+    reviews_for_gig,
 )
 from ...services.authorization import roles_required
 from ...services.marketplace import (
@@ -27,6 +30,7 @@ from ...services.marketplace import (
     close_gig,
     create_gig,
     submit_proposal,
+    submit_review,
 )
 from . import bp
 
@@ -63,6 +67,7 @@ def gig_detail(gig_id: int):
         close_form=close_form,
         owner_view=owner_view,
         already_applied=already_applied,
+        reviews=reviews_for_gig(gig.id),
     )
 
 
@@ -172,11 +177,62 @@ def proposal_detail(proposal_id: int):
     if current_user.id not in {proposal.freelancer_id, proposal.gig.owner_id}:
         abort(404)
     decision_form = ProposalDecisionForm()
+    my_review = find_review_for_reviewer(proposal.id, current_user.id)
     return render_template(
         "marketplace/proposal_detail.html",
         proposal=proposal,
         decision_form=decision_form,
         owner_view=current_user.id == proposal.gig.owner_id,
+        my_review=my_review,
+    )
+
+
+
+
+
+@bp.route("/proposals/<int:proposal_id>/review", methods=["GET", "POST"])
+@login_required
+def write_review(proposal_id: int):
+    """Allow either participant to review the other after an accepted proposal."""
+    proposal = find_proposal(proposal_id)
+    if proposal is None:
+        abort(404)
+    if current_user.id not in {proposal.freelancer_id, proposal.gig.owner_id}:
+        abort(404)
+    if proposal.status != "accepted":
+        abort(409)
+
+    existing_review = find_review_for_reviewer(proposal.id, current_user.id)
+    if existing_review is not None:
+        flash("You have already reviewed this interaction.", "info")
+        return redirect(url_for("marketplace.proposal_detail", proposal_id=proposal.id))
+
+    reviewee = (
+        proposal.freelancer
+        if current_user.id == proposal.gig.owner_id
+        else proposal.gig.owner
+    )
+    form = ReviewForm()
+    if form.validate_on_submit():
+        try:
+            submit_review(
+                proposal.id,
+                current_user.id,
+                rating=form.rating.data,
+                body=form.body.data,
+            )
+        except MarketplaceError as exc:
+            db.session.rollback()
+            flash(str(exc), "warning")
+        else:
+            flash("Your review was published.", "success")
+            return redirect(url_for("marketplace.gig_detail", gig_id=proposal.gig_id))
+
+    return render_template(
+        "marketplace/review_form.html",
+        form=form,
+        proposal=proposal,
+        reviewee=reviewee,
     )
 
 
