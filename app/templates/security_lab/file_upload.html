@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Unrestricted File Upload Security Lab{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">File type validation is bypassed for demonstration. In accordance with safety rules, uploaded files are never executed and remain confined to the isolated lab directory.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">Unrestricted File Upload</h1>
+    <p class="lead text-secondary">In freelance marketplaces, applications frequently accept file uploads such as resumes, portfolio samples, and gig deliverables. Without rigorous server-side validation, attackers can upload server-side scripts (e.g. PHP or Python) to achieve Remote Code Execution (RCE) or HTML/SVG files to trigger Stored Cross-Site Scripting.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="alert alert-light border mb-4" aria-labelledby="attack-flow-heading">
+      <p class="eyebrow mb-1">ATTACK FLOW</p><h2 class="h5" id="attack-flow-heading">How unvalidated uploads compromise web applications</h2>
+      <ol class="small mb-0">
+        <li>An attacker locates an upload form intended for benign documents or image attachments.</li>
+        <li>The attacker crafts an executable server-side script (e.g. a web shell) or disguises a script with an allowed extension.</li>
+        <li>When validation is missing or naive, the application saves the script with its dangerous extension in a web-accessible directory.</li>
+        <li>Requesting the uploaded script triggers server-side execution, granting the attacker arbitrary command execution on the host.</li>
+      </ol>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="upload-heading">
+      <p class="eyebrow mb-1">UPLOAD DEMONSTRATION</p><h2 class="h5" id="upload-heading">Submit a file or pre-configured sample</h2>
+      <p class="text-secondary small mb-3">
+        In <strong>Mitigated</strong> mode, the server enforces an extension allowlist (<code>{{ allowed_extensions|join(', ') }}</code>), verifies magic bytes, caps file size at {{ max_size_kb }} KB, and renames the file to a random UUID. In <strong>Vulnerable</strong> mode, extension and MIME checks are bypassed for demonstration.
+      </p>
+
+      <form method="post" action="{{ url_for('security_lab.file_upload_submit') }}" enctype="multipart/form-data" class="border rounded p-3 bg-light">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label for="sample_case" class="form-label fw-semibold">Choose demonstration sample:</label>
+          {{ form.sample_case(class="form-select", id="sample_case") }}
+          <div class="form-text">Select an approved harmless classroom sample or choose custom upload.</div>
+        </div>
+
+        <div class="mb-3" id="custom-file-group">
+          <label for="file" class="form-label fw-semibold">Or browse custom local file:</label>
+          {{ form.file(class="form-control", id="file") }}
+          <div class="form-text">Required only if "Upload custom file" is selected above. Maximum {{ max_size_kb }} KB.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Submit File</button>
+      </form>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="evidence-heading">
+      <p class="eyebrow mb-1">SERVER DECISION & BOUNDED EVIDENCE</p><h2 class="h5" id="evidence-heading">Inspection results</h2>
+      {% if evidence %}
+      <dl class="row small mb-0">
+        <dt class="col-sm-4">Effective mode</dt><dd class="col-sm-8">{{ evidence.effective_mode|upper }}</dd>
+        <dt class="col-sm-4">Original filename</dt><dd class="col-sm-8"><code>{{ evidence.original_filename }}</code></dd>
+        <dt class="col-sm-4">Stored filename</dt><dd class="col-sm-8">{% if evidence.stored_filename %}<code>{{ evidence.stored_filename }}</code>{% else %}<span class="text-muted">None (not stored)</span>{% endif %}</dd>
+        <dt class="col-sm-4">Detected MIME type</dt><dd class="col-sm-8"><code>{{ evidence.detected_mime }}</code></dd>
+        <dt class="col-sm-4">File size</dt><dd class="col-sm-8">{{ evidence.file_size_bytes }} bytes</dd>
+        <dt class="col-sm-4">Validation verdict</dt><dd class="col-sm-8"><span class="fw-semibold {% if evidence.is_stored %}text-success{% else %}text-danger{% endif %}">{{ evidence.validation_verdict }}</span></dd>
+        <dt class="col-sm-4">Expected behavior</dt><dd class="col-sm-8">{{ evidence.expected_behavior }}</dd>
+        <dt class="col-sm-4">Observed behavior</dt><dd class="col-sm-8">{{ evidence.observed_behavior }}</dd>
+        <dt class="col-sm-4">Mitigation status</dt><dd class="col-sm-8">{{ evidence.mitigation_status }}</dd>
+        <dt class="col-sm-4">Lab run result</dt><dd class="col-sm-8">{{ evidence.run_result|upper }} (status only)</dd>
+        <dt class="col-sm-4">Timestamp (UTC)</dt><dd class="col-sm-8">{{ evidence.timestamp }}</dd>
+      </dl>
+      {% else %}
+      <p class="text-secondary mb-0">Submit a demonstration sample or custom file above to see the server's validation decision. No file contents or attack payloads are stored in audit logs.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="state-heading">
+      <p class="eyebrow mb-1">STORED FILE STATE</p><h2 class="h5" id="state-heading">Active demonstration file</h2>
+      {% if active_file %}
+      <div class="alert alert-secondary mb-3">
+        <dl class="row small mb-0">
+          <dt class="col-sm-4">Current file on disk</dt><dd class="col-sm-8"><code>{{ active_file.filename }}</code></dd>
+          <dt class="col-sm-4">File size</dt><dd class="col-sm-8">{{ active_file.size_bytes }} bytes</dd>
+          <dt class="col-sm-4">Saved at (UTC)</dt><dd class="col-sm-8">{{ active_file.modified_iso }}</dd>
+        </dl>
+      </div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('security_lab.file_upload_download', filename=active_file.filename) }}">
+          Download safe attachment
+        </a>
+        <form method="post" action="{{ url_for('security_lab.file_upload_reset') }}" class="d-inline">
+          {{ reset_form.hidden_tag() }}
+          <button type="submit" class="btn btn-outline-secondary btn-sm">Clear uploaded file</button>
+        </form>
+      </div>
+      <p class="small text-secondary mt-2 mb-0">Downloads enforce <code>Content-Disposition: attachment</code> and <code>X-Content-Type-Options: nosniff</code>. The server never executes uploaded files.</p>
+      {% else %}
+      <p class="text-secondary mb-0">No demonstration file is currently stored for your user account.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+      <p class="eyebrow mb-1">MITIGATION</p><h2 class="h5" id="mitigation-heading">Six pillars of secure file upload architecture</h2>
+      <ul class="small mb-0">
+        <li class="mb-1"><strong>Strict Extension Allowlisting:</strong> Never use a blocklist. Only allow explicit, required formats (e.g., <code>.pdf</code>, <code>.png</code>, <code>.jpg</code>, <code>.txt</code>) and reject all executable extensions.</li>
+        <li class="mb-1"><strong>File Signature (Magic Bytes) Verification:</strong> Inspect binary file headers to ensure the file format matches its claimed extension, defeating extension-spoofing attacks (e.g., <code>shell.php.png</code>).</li>
+        <li class="mb-1"><strong>File Size Bounds:</strong> Cap upload sizes strictly on both client and server to prevent denial-of-service and disk-space exhaustion.</li>
+        <li class="mb-1"><strong>Server-Controlled Storage Naming:</strong> Never use the user-supplied filename on disk. Generate random UUIDs (e.g. <code>4f9e...1a.pdf</code>) to neutralize directory traversal and prevent predictable URLs.</li>
+        <li class="mb-1"><strong>Storage Outside Web Root:</strong> Store files in dedicated private directories (e.g. <code>instance/lab_uploads/</code>) that the web server will not interpret or serve directly as executable scripts.</li>
+        <li><strong>Safe Serving Headers:</strong> Serve uploaded files with <code>Content-Disposition: attachment</code> and <code>X-Content-Type-Options: nosniff</code> so the browser treats them as non-executable downloads.</li>
+      </ul>
+    </section>
+  </div></article>
+</div></div>
+{% endblock %}

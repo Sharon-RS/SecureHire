@@ -3,7 +3,7 @@
 import re
 
 from flask_wtf import FlaskForm
-from wtforms import SelectField, StringField, SubmitField, TextAreaField
+from wtforms import FileField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Length, ValidationError
 
 from ..services.demos.sqli import SAFE_SQLI_PAYLOAD
@@ -84,3 +84,25 @@ class ReflectedXssSearchForm(FlaskForm):
         render_kw={"maxlength": 160, "autocomplete": "off"},
     )
     submit = SubmitField("Run Demo")
+
+
+class FileUploadDemoForm(FlaskForm):
+    sample_case = SelectField(
+        "Demonstration sample",
+        choices=[
+            ("custom", "Upload custom file (browse below)"),
+            ("benign_doc", "Benign Text Document (sample_portfolio.txt)"),
+            ("benign_img", "Benign Image (sample_diagram.png)"),
+            ("harmless_php", "Harmless PHP Script (harmless_poc.php)"),
+            ("harmless_py", "Harmless Python Script (harmless_script.py)"),
+            ("disguised_ext", "Disguised Extension (shell.php.png)"),
+        ],
+        default="custom",
+    )
+    file = FileField("File")
+    submit = SubmitField("Submit File")
+
+
+class FileUploadResetForm(FlaskForm):
+    submit = SubmitField("Clear uploaded files")
+

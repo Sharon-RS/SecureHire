@@ -2,12 +2,14 @@
 
 from datetime import datetime, timezone
 
-from flask import abort, flash, make_response, redirect, render_template, request, url_for
+from flask import abort, flash, make_response, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 
 from ...extensions import csrf as csrf_protection, db
 from ...forms.security_lab import (
     CsrfFixtureResetForm,
+    FileUploadDemoForm,
+    FileUploadResetForm,
     IdorBolaReadForm,
     ReflectedXssSearchForm,
     SQLiSearchForm,
@@ -38,6 +40,19 @@ from ...services.demos.csrf.actions import accept_fixture_proposal, reset_fixtur
 from ...services.demos.csrf.fixture import csrf_scenario_proposal
 from ...services.demos.csrf.mitigated import require_valid_token
 from ...services.demos.csrf.vulnerable import accept_without_token_requirement
+from ...services.demos.file_upload import (
+    ALLOWED_EXTENSIONS,
+    DEMONSTRATION_SAMPLES,
+    MAX_FILE_SIZE_BYTES,
+    SAMPLE_MAP,
+)
+from ...services.demos.file_upload.mitigated import process_mitigated_upload
+from ...services.demos.file_upload.storage import (
+    delete_user_uploads,
+    get_file_for_download,
+    get_user_active_upload,
+)
+from ...services.demos.file_upload.vulnerable import process_vulnerable_upload
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -82,6 +97,8 @@ def module_detail(vulnerability_key: str):
         return _idor_bola_demonstration(module, state)
     if vulnerability_key == "csrf":
         return _render_csrf_page(module, state)
+    if vulnerability_key == "file_upload":
+        return _render_file_upload_page(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
 
 
@@ -199,6 +216,101 @@ def csrf_fixture_reset():
         "info",
     )
     return redirect(url_for("security_lab.csrf_page"))
+
+
+@bp.get("/file-upload")
+@login_required
+def file_upload_page():
+    """Display the Unrestricted File Upload lesson and upload controls."""
+    module = get_vulnerability("file_upload")
+    state = get_module_state("file_upload")
+    return _render_file_upload_page(module, state)
+
+
+@bp.post("/file-upload")
+@login_required
+def file_upload_submit():
+    """Accept an upload or demonstration sample and process through effective mode."""
+    module = get_vulnerability("file_upload")
+    state = get_module_state("file_upload")
+    form = FileUploadDemoForm()
+
+    if not form.validate_on_submit():
+        return _render_file_upload_page(module, state, form=form, status_code=400)
+
+    sample_case = form.sample_case.data
+    filename = None
+    content = None
+
+    if sample_case != "custom" and sample_case in SAMPLE_MAP:
+        sample = SAMPLE_MAP[sample_case]
+        filename = sample.filename
+        content = sample.content
+    elif form.file.data:
+        uploaded_file = form.file.data
+        filename = uploaded_file.filename
+        content = uploaded_file.read()
+    else:
+        flash("Please select a demonstration sample or choose a file to upload.", "warning")
+        return _render_file_upload_page(module, state, form=form, status_code=400)
+
+    if not filename:
+        flash("Filename cannot be empty.", "danger")
+        return _render_file_upload_page(module, state, form=form, status_code=400)
+
+    is_vulnerable = state["effective_mode"] == "vulnerable"
+    if is_vulnerable:
+        success, evidence, status_code = process_vulnerable_upload(
+            current_user.id, filename, content
+        )
+    else:
+        success, evidence, status_code = process_mitigated_upload(
+            current_user.id, filename, content
+        )
+
+    run_result = "passed" if success else "blocked"
+    run = record_lab_run("file_upload", run_result)
+    evidence["run_result"] = run.result
+
+    return _render_file_upload_page(
+        module, state, form=form, evidence=evidence, status_code=status_code
+    )
+
+
+@bp.get("/file-upload/download/<path:filename>")
+@login_required
+def file_upload_download(filename: str):
+    """Safely serve the uploaded demonstration file as a download attachment."""
+    try:
+        file_path, safe_name = get_file_for_download(current_user.id, filename)
+    except (FileNotFoundError, PermissionError, ValueError):
+        abort(404)
+
+    response = send_file(
+        file_path,
+        as_attachment=True,
+        download_name=safe_name,
+        mimetype="application/octet-stream",
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@bp.post("/file-upload/reset")
+@login_required
+def file_upload_reset():
+    """Reset and delete current user's uploaded demonstration files."""
+    form = FileUploadResetForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    deleted = delete_user_uploads(current_user.id)
+    if deleted:
+        flash("Uploaded demonstration files cleared.", "info")
+    else:
+        flash("No demonstration files were present.", "info")
+    return redirect(url_for("security_lab.file_upload_page"))
+
 
 
 @bp.route("/idor", methods=["GET", "POST"])
@@ -382,6 +494,30 @@ def _render_csrf_page(module, state, evidence=None, status_code=200):
             can_run=can_run,
             reset_form=CsrfFixtureResetForm(),
             evidence=evidence,
+        ),
+        status_code,
+    )
+
+
+def _render_file_upload_page(module, state, form=None, evidence=None, status_code=200):
+    """Render the File Upload demonstration page with bounded evidence."""
+    if form is None:
+        form = FileUploadDemoForm()
+    active_file = get_user_active_upload(current_user.id)
+    reset_form = FileUploadResetForm()
+
+    return make_response(
+        render_template(
+            "security_lab/file_upload.html",
+            module=module,
+            state=state,
+            form=form,
+            reset_form=reset_form,
+            active_file=active_file,
+            evidence=evidence,
+            samples=DEMONSTRATION_SAMPLES,
+            allowed_extensions=sorted(ALLOWED_EXTENSIONS),
+            max_size_kb=MAX_FILE_SIZE_BYTES // 1024,
         ),
         status_code,
     )
