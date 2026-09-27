@@ -1,6 +1,6 @@
 # SecureHire
 
-SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework for future classroom demonstrations. This milestone adds administrator-managed mode metadata, safety gates, audit records, and nonfunctional placeholders. It does not implement any vulnerability demonstration.
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. This milestone implements an isolated SQL Injection demonstration with vulnerable and mitigated search paths; the other nine vulnerability modules remain placeholders.
 
 ## Technology
 
@@ -120,18 +120,18 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers the existing marketplace plus Security Lab defaults, allowlisting, admin authorization, CSRF, audit records, the vulnerable-mode safety gate, and payload-free run records.
+The test suite covers the marketplace and Security Lab defaults, SQLi mode gates and query behavior, read-only fixture scope, normal marketplace isolation, CSRF, authorization, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can view read-only module placeholder pages.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the read-only SQL Injection demonstration; the remaining module pages are placeholders.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
 `LAB_ENABLE=false` is the default. A stored vulnerable setting remains effectively mitigated unless the server configuration explicitly enables the flag, the app environment is development or testing, and the accepted socket peer is loopback. Host and proxy headers do not establish locality. Changing the setting requires an authenticated admin, a valid server-validated mode, and a CSRF token.
 
-To exercise the framework gate locally, set `LAB_ENABLE=true` in the local `.env`, restart the server, and select Vulnerable for one module. That only changes the effective status and warning banner: **this milestone contains no vulnerability implementation or attack behavior**. Return the mode to Mitigated when finished.
+To exercise the SQL Injection demonstration locally, set LAB_ENABLE=true in the local .env, restart the server, and select Vulnerable for SQLi in the admin dashboard. The demonstration uses only the dedicated synthetic fixture table and the approved harmless input. Return SQLi to Mitigated when finished. See docs/security-lab/sql-injection.md for the behavior, isolation, evidence, and tests.
 
 ## Security milestone boundary
 
-All ten modules currently render explanation and mitigation placeholders. SQL injection, stored/reflected XSS, IDOR/BOLA, CSRF demonstration behavior, file upload, path traversal, clickjacking, authentication/session vulnerabilities, and security misconfiguration demonstrations are not implemented. CSRF protection for Security Lab administration remains enabled independently. Lab run records accept only bounded status values and have no payload field.
+SQL Injection is the only implemented vulnerability demonstration. The other nine modules—stored and reflected XSS, IDOR/BOLA, CSRF, file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The Security Lab administration interface retains CSRF protection independently of the CSRF demonstration. Lab run records accept only bounded status values and do not store request payloads.

@@ -169,15 +169,16 @@ def test_warning_banner_is_shown_only_when_vulnerable_mode_is_effective(app):
     assert b"LOCALHOST ONLY" in response.data
 
 
-def test_module_detail_is_only_a_nonfunctional_placeholder(app):
+def test_non_sqli_module_detail_remains_a_nonfunctional_placeholder(app):
     make_user(app, "freelancer@example.test", "freelancer")
     client = app.test_client()
     login_as(client, "freelancer@example.test")
 
-    response = client.get("/security-lab/sqli")
+    response = client.get("/security-lab/stored_xss")
     assert response.status_code == 200
     assert b"Demonstration not implemented yet." in response.data
     assert b"Planned mitigation" in response.data
+    assert client.get("/security-lab/sqli").status_code == 200
     assert client.get("/security-lab/not-a-real-module").status_code == 404
 
 

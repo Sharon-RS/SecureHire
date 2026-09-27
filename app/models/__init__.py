@@ -103,6 +103,18 @@ class Gig(db.Model):
     proposals = db.relationship("Proposal", back_populates="gig", cascade="all, delete-orphan")
 
 
+class LabGigFixture(db.Model):
+    """Synthetic rows reserved exclusively for the isolated SQL injection lab."""
+
+    __tablename__ = "security_lab_gig_fixtures"
+    __table_args__ = (db.Index("ix_security_lab_gig_fixtures_category", "category"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(140), nullable=False)
+    category = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+
+
 class Proposal(db.Model):
     __tablename__ = "proposals"
     __table_args__ = (
