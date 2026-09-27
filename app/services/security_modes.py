@@ -51,7 +51,7 @@ VULNERABILITIES = (
         "csrf",
         "CSRF",
         "Explains how a browser can be tricked into sending an unwanted state-changing request.",
-        "Require validated CSRF tokens for every state-changing form and keep lab administration protected.",
+        "Require server-validated CSRF tokens for normal state changes and keep Security Lab administration protected.",
     ),
     VulnerabilityModule(
         "file_upload",

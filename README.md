@@ -1,6 +1,6 @@
 # SecureHire
 
-SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 6 adds an isolated IDOR/BOLA demonstration. SQL Injection, Stored XSS, Reflected XSS, and IDOR/BOLA have vulnerable and mitigated paths; the other six vulnerability modules remain placeholders.
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 7 adds an isolated CSRF demonstration. SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, and CSRF have vulnerable and mitigated paths; the other five vulnerability modules remain placeholders.
 
 ## Technology
 
@@ -123,11 +123,11 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, and IDOR/BOLA behavior, vulnerable-mode gates, object-level authorization, CSRF, security headers, and payload-free lab-run records.
+The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, and CSRF behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, and IDOR/BOLA demonstrations; the other module pages are placeholders.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, and CSRF demonstrations; the other module pages are placeholders.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
@@ -141,6 +141,8 @@ To exercise Reflected XSS, select Vulnerable for Reflected XSS and open /securit
 
 To exercise IDOR/BOLA, run the synthetic seed command and sign in as Freelancer A or Lab Freelancer B. Open /security-lab/idor and request the other synthetic freelancer’s proposal. In Vulnerable mode, with the central loopback lab gate open, the isolated page returns bounded synthetic proposal fields and records only the run status. In Mitigated mode, a cross-user request returns HTTP 403 without proposal contents, while the signed-in user can still read their own. The normal /proposals/<id> marketplace route keeps its object-level authorization in both modes. No proposal data is modified. See docs/security-lab/idor-bola.md.
 
+To exercise CSRF, run the synthetic seed command and sign in as `buyer@example.test`. Open `/security-lab/csrf` and submit the missing-token, invalid-token, and valid-token cases against the fixed synthetic proposal. In Mitigated mode only the valid token can accept the fixture. In Vulnerable mode, when the complete central lab gate is open, all three token states can accept that one fixture. Use the separate CSRF-protected reset action between cases. Normal proposal actions, login, profile edits, Security Lab administration, mode changes, and reset remain CSRF-protected in either mode. See [docs/security-lab/csrf.md](docs/security-lab/csrf.md).
+
 ## Security milestone boundary
 
-Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, and IDOR/BOLA. The remaining six modules—CSRF, file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The Security Lab administration interface retains CSRF protection independently of the CSRF demonstration. Lab run records accept only bounded status values and do not store request payloads.
+Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, and CSRF. The remaining five modules—file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The CSRF demonstration bypass is confined to its gated fixed-fixture endpoint; the Security Lab administration interface retains CSRF protection. Lab run records accept only bounded status values and do not store request tokens or request payloads.

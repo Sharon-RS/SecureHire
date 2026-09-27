@@ -190,7 +190,10 @@ def test_stored_xss_is_functional_and_other_module_remains_a_placeholder(app):
     assert b"IDOR / BOLA" in idor.data
     assert b"Demonstration not implemented yet." not in idor.data
     assert client.get("/security-lab/idor_bola").status_code == 200
-    assert b"Demonstration not implemented yet." in client.get("/security-lab/csrf").data
+    csrf = client.get("/security-lab/csrf")
+    assert csrf.status_code == 200
+    assert b"Cross-Site Request Forgery (CSRF)" in csrf.data
+    assert b"Demonstration not implemented yet." not in csrf.data
     assert client.get("/security-lab/not-a-real-module").status_code == 404
 
 

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}CSRF Security Lab{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">This tokenless state change is limited to one synthetic proposal and the complete server-side lab gate.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">Cross-Site Request Forgery (CSRF)</h1>
+    <p class="lead text-secondary">CSRF occurs when a browser with an authenticated session is induced to send an unintended state-changing request. Authentication proves which account made a request; a CSRF token separately helps prove the request came from a form issued by SecureHire.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="alert alert-light border mb-4" aria-labelledby="attack-flow-heading">
+      <p class="eyebrow mb-1">ATTACK FLOW</p><h2 class="h5" id="attack-flow-heading">How an unintended request can use an authenticated browser</h2>
+      <ol class="small mb-0">
+        <li>The synthetic buyer is already signed in, so the browser has a SecureHire session.</li>
+        <li>An unwanted browser submission targets the proposal acceptance action without a valid CSRF token; the missing-token form below represents that request locally.</li>
+        <li>The server either accepts the fixed fixture action in effectively Vulnerable mode or rejects missing/invalid tokens in Mitigated mode.</li>
+      </ol>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="request-heading">
+      <p class="eyebrow mb-1">REQUEST</p><h2 class="h5" id="request-heading">Synthetic proposal acceptance</h2>
+      <dl class="row small mb-0">
+        <dt class="col-sm-5">Synthetic requester</dt><dd class="col-sm-7">{{ requester_label }}</dd>
+        <dt class="col-sm-5">Target action</dt><dd class="col-sm-7">{{ target_label }}</dd>
+        <dt class="col-sm-5">Current fixture state</dt><dd class="col-sm-7">{{ proposal.status|title if proposal else "Unavailable" }}</dd>
+      </dl>
+      {% if not proposal %}
+      <div class="alert alert-warning mt-3 mb-0" role="status">The dedicated synthetic proposal fixture is unavailable. Run the local synthetic seed command; this page will not create fixture data.</div>
+      {% elif not can_run %}
+      <div class="alert alert-info mt-3 mb-0" role="status">Sign in as the synthetic fixture owner to run the demonstration. The target action is server-selected and cannot be changed in this form.</div>
+      {% else %}
+      <p class="text-secondary mt-3">Each button submits a separate request against the same fixed fixture. No proposal ID, requester ID, or mode is accepted from the form.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="token-heading">
+      <p class="eyebrow mb-1">CSRF TOKEN</p><h2 class="h5" id="token-heading">Choose a controlled token case</h2>
+      <p class="text-secondary">The valid token is carried in a hidden form field and is never printed in the visible page or evidence. The invalid case uses a harmless synthetic value.</p>
+      {% if proposal and can_run %}
+      <div class="d-grid gap-3">
+        <form method="post" action="{{ url_for('security_lab.csrf_demo_run') }}" class="border rounded p-3">
+          <p class="fw-semibold mb-2">Missing CSRF token</p>
+          <p class="small text-secondary">This form intentionally has no CSRF token field.</p>
+          <button class="btn btn-primary" type="submit">Run Demo</button>
+        </form>
+        <form method="post" action="{{ url_for('security_lab.csrf_demo_run') }}" class="border rounded p-3">
+          <input type="hidden" name="csrf_token" value="invalid-securehire-lab-token">
+          <p class="fw-semibold mb-2">Invalid CSRF token</p>
+          <p class="small text-secondary">This form submits a fixed invalid synthetic value.</p>
+          <button class="btn btn-primary" type="submit">Run Demo</button>
+        </form>
+        <form method="post" action="{{ url_for('security_lab.csrf_demo_run') }}" class="border rounded p-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <p class="fw-semibold mb-2">Valid CSRF token</p>
+          <p class="small text-secondary">This form submits a server-generated token for validation.</p>
+          <button class="btn btn-primary" type="submit">Run Demo</button>
+        </form>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="response-heading">
+      <p class="eyebrow mb-1">SERVER RESPONSE</p><h2 class="h5" id="response-heading">Bounded evidence</h2>
+      {% if evidence %}
+      <dl class="row small mb-3">
+        <dt class="col-sm-5">Effective mode</dt><dd class="col-sm-7">{{ evidence.effective_mode|upper }}</dd>
+        <dt class="col-sm-5">Token state</dt><dd class="col-sm-7">{{ evidence.token_state|title }}</dd>
+        <dt class="col-sm-5">HTTP status</dt><dd class="col-sm-7">{{ evidence.http_status }}</dd>
+        <dt class="col-sm-5">Expected behavior</dt><dd class="col-sm-7">{{ evidence.expected_behavior }}</dd>
+        <dt class="col-sm-5">Observed behavior</dt><dd class="col-sm-7">{{ evidence.observed_behavior }}</dd>
+        <dt class="col-sm-5">Mitigation status</dt><dd class="col-sm-7">{{ evidence.mitigation_status }}</dd>
+        <dt class="col-sm-5">Lab run result</dt><dd class="col-sm-7">{{ evidence.run_result|upper }} (status only)</dd>
+        <dt class="col-sm-5">Timestamp (UTC)</dt><dd class="col-sm-7">{{ evidence.timestamp }}</dd>
+      </dl>
+      {% else %}
+      <p class="text-secondary mb-0">Run a token case to see the server’s decision. Evidence includes no token value, password, or session identifier.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="state-heading">
+      <p class="eyebrow mb-1">STATE CHANGE</p><h2 class="h5" id="state-heading">Synthetic proposal status</h2>
+      {% if evidence %}
+      <dl class="row small">
+        <dt class="col-sm-5">State changed</dt><dd class="col-sm-7">{{ "Yes" if evidence.state_changed else "No" }}</dd>
+        <dt class="col-sm-5">Before</dt><dd class="col-sm-7">{{ evidence.state_before|title }}</dd>
+        <dt class="col-sm-5">After</dt><dd class="col-sm-7">{{ evidence.state_after|title }}</dd>
+      </dl>
+      {% else %}
+      <p class="text-secondary">Only acceptance of the fixed proposal can change this state.</p>
+      {% endif %}
+      {% if proposal and can_run %}
+      <form method="post" action="{{ url_for('security_lab.csrf_fixture_reset') }}">
+        {{ reset_form.hidden_tag() }}
+        <button class="btn btn-outline-secondary" type="submit">Reset fixture to Pending (CSRF-protected)</button>
+      </form>
+      <p class="small text-secondary mt-2 mb-0">Reset uses the normal server-side CSRF validator in either Security Lab mode. Use it between token cases after an accepted request.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+      <p class="eyebrow mb-1">MITIGATION</p><h2 class="h5" id="mitigation-heading">Validate request integrity on the server</h2>
+      <p class="mb-2">In Vulnerable mode, this isolated endpoint observes whether the submitted token is missing, invalid, or valid, then deliberately ignores that result for the one fixed synthetic acceptance action. In Mitigated mode, Flask-WTF validates the token server-side before the action runs; missing and invalid tokens receive HTTP 400 and do not change state.</p>
+      <p class="mb-2">A CSRF token helps distinguish an intended same-site form submission from an unwanted cross-site request. JavaScript checks are not a substitute because a client can omit or change them. Authentication identifies the browser’s account; it does not prove the account holder intended this action.</p>
+      <p class="small text-secondary mb-0">The demonstration uses the existing proposal acceptance service only for its dedicated fixture. Normal proposal actions, login, profile edits, Security Lab administration, mode changes, and the reset action remain CSRF-protected in every mode.</p>
+    </section>
+  </div></article>
+</div></div>
+{% endblock %}

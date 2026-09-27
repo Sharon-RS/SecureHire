@@ -11,6 +11,11 @@ load_dotenv()
 from app import create_app
 from app.extensions import db
 from app.models import Gig, Profile, Proposal, User
+from app.services.demos.csrf import (
+    LAB_CSRF_COVER_LETTER,
+    LAB_CSRF_GIG_CATEGORY,
+    LAB_CSRF_GIG_TITLE,
+)
 from app.services.demos.idor_bola import (
     LAB_FREELANCER_A_EMAIL,
     LAB_FREELANCER_B_EMAIL,
@@ -82,6 +87,47 @@ def ensure_idor_scenario(buyer, freelancer_a, freelancer_b):
             )
 
 
+def ensure_csrf_scenario(buyer, freelancer):
+    """Seed the closed synthetic proposal changed only by the CSRF lab."""
+    gig = (
+        Gig.query.filter_by(
+            owner_id=buyer.id,
+            title=LAB_CSRF_GIG_TITLE,
+            category=LAB_CSRF_GIG_CATEGORY,
+            status="closed",
+        )
+        .order_by(Gig.id.asc())
+        .first()
+    )
+    if gig is None:
+        gig = Gig(
+            owner=buyer,
+            title=LAB_CSRF_GIG_TITLE,
+            description="A closed synthetic proposal reserved for the local CSRF demonstration.",
+            category=LAB_CSRF_GIG_CATEGORY,
+            budget=Decimal("900.00"),
+            status="closed",
+        )
+        db.session.add(gig)
+        db.session.flush()
+
+    proposal = Proposal.query.filter_by(
+        gig_id=gig.id,
+        freelancer_id=freelancer.id,
+    ).first()
+    if proposal is None:
+        db.session.add(
+            Proposal(
+                gig=gig,
+                freelancer=freelancer,
+                cover_letter=LAB_CSRF_COVER_LETTER,
+                proposed_price=Decimal("825.00"),
+                timeline="Eleven synthetic workdays",
+                status="pending",
+            )
+        )
+
+
 def main() -> int:
     password = os.getenv("SECUREHIRE_DEMO_PASSWORD", "")
     if len(password) < 12:
@@ -147,6 +193,7 @@ def main() -> int:
             db.session.add(proposal)
 
         ensure_idor_scenario(buyer, freelancer, lab_freelancer_b)
+        ensure_csrf_scenario(buyer, lab_freelancer_b)
 
         db.session.commit()
         print("Synthetic demo accounts and sample marketplace records are ready.")

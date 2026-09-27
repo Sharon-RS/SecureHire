@@ -11,6 +11,10 @@ from ..services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
 from ..services.demos.reflected_xss import APPROVED_REFLECTED_XSS_PAYLOAD
 
 
+class CsrfFixtureResetForm(FlaskForm):
+    submit = SubmitField("Reset synthetic proposal")
+
+
 class IdorBolaReadForm(FlaskForm):
     target_proposal_id = SelectField(
         "Synthetic proposal",

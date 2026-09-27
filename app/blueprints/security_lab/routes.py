@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from flask import abort, flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ...extensions import db
+from ...extensions import csrf as csrf_protection, db
 from ...forms.security_lab import (
+    CsrfFixtureResetForm,
     IdorBolaReadForm,
     ReflectedXssSearchForm,
     SQLiSearchForm,
@@ -29,6 +30,14 @@ from ...services.demos.stored_xss.vulnerable import render_vulnerable_demo_value
 from ...services.demos.idor_bola.mitigated import read_proposal_mitigated
 from ...services.demos.idor_bola.scenario import persona_label_for_email, scenario_proposals
 from ...services.demos.idor_bola.vulnerable import read_proposal_vulnerable
+from ...services.demos.csrf import (
+    LAB_CSRF_REQUESTER_LABEL,
+    LAB_CSRF_TARGET_LABEL,
+)
+from ...services.demos.csrf.actions import accept_fixture_proposal, reset_fixture_proposal
+from ...services.demos.csrf.fixture import csrf_scenario_proposal
+from ...services.demos.csrf.mitigated import require_valid_token
+from ...services.demos.csrf.vulnerable import accept_without_token_requirement
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -71,7 +80,125 @@ def module_detail(vulnerability_key: str):
         return _reflected_xss_demonstration(module, state)
     if vulnerability_key == "idor_bola":
         return _idor_bola_demonstration(module, state)
+    if vulnerability_key == "csrf":
+        return _render_csrf_page(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
+
+
+@bp.get("/csrf")
+@login_required
+def csrf_page():
+    """Display the CSRF lesson; only its dedicated run endpoint is exempt."""
+    module = get_vulnerability("csrf")
+    state = get_module_state("csrf")
+    return _render_csrf_page(module, state)
+
+
+@bp.post("/csrf/run")
+@login_required
+@csrf_protection.exempt
+def csrf_demo_run():
+    """Run a fixed proposal action with mode-specific server-side token enforcement."""
+    module = get_vulnerability("csrf")
+    state = get_module_state("csrf")
+    proposal = csrf_scenario_proposal()
+    if proposal is None:
+        return _render_csrf_page(module, state, status_code=503)
+    if current_user.id != proposal.gig.owner_id:
+        return _render_csrf_page(module, state, status_code=403)
+
+    if state["effective_mode"] == "vulnerable":
+        token_decision = accept_without_token_requirement()
+    else:
+        token_decision = require_valid_token()
+
+    action_result = None
+    if token_decision.accepted:
+        action_result = accept_fixture_proposal(proposal)
+
+    if not token_decision.accepted:
+        status_code = 400
+    elif action_result is not None and action_result.changed:
+        status_code = 200
+    else:
+        status_code = 409
+
+    if state["effective_mode"] == "vulnerable":
+        expected_behavior = (
+            f"Vulnerable mode accepts the fixed synthetic action with a "
+            f"{token_decision.token_state} token state."
+        )
+        mitigation_status = "CSRF token enforcement is intentionally bypassed for this gated lab request."
+    elif token_decision.token_state == "valid":
+        expected_behavior = "Mitigated mode accepts a valid server-validated token."
+        mitigation_status = "Server-side CSRF token validation is active."
+    else:
+        expected_behavior = (
+            f"Mitigated mode rejects a {token_decision.token_state} token and leaves the fixture unchanged."
+        )
+        mitigation_status = "Server-side CSRF token validation is active."
+
+    if not token_decision.accepted:
+        observed_behavior = (
+            f"The server returned HTTP {status_code}; proposal contents and state were not changed."
+        )
+        state_before = proposal.status
+        state_after = proposal.status
+    elif action_result is not None and action_result.changed:
+        observed_behavior = (
+            "The server accepted the fixture action and changed its status from Pending to Accepted."
+        )
+        state_before = action_result.state_before
+        state_after = action_result.state_after
+    else:
+        observed_behavior = (
+            "The server returned HTTP 409 because the fixture proposal is not pending. "
+            "Reset the fixture before another state-change attempt."
+        )
+        state_before = action_result.state_before if action_result else proposal.status
+        state_after = action_result.state_after if action_result else proposal.status
+
+    run = record_lab_run(
+        "csrf",
+        "passed" if status_code in {200, 400} else "blocked",
+    )
+    evidence = {
+        "effective_mode": state["effective_mode"],
+        "token_state": token_decision.token_state,
+        "http_status": status_code,
+        "state_changed": bool(action_result and action_result.changed),
+        "state_before": state_before,
+        "state_after": state_after,
+        "expected_behavior": expected_behavior,
+        "observed_behavior": observed_behavior,
+        "mitigation_status": mitigation_status,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_result": run.result,
+    }
+    return _render_csrf_page(module, state, evidence=evidence, status_code=status_code)
+
+
+@bp.post("/csrf/reset")
+@login_required
+def csrf_fixture_reset():
+    """Reset only the known synthetic proposal; global Flask-WTF CSRF stays active."""
+    proposal = csrf_scenario_proposal()
+    if proposal is None:
+        abort(503)
+    if current_user.id != proposal.gig.owner_id:
+        abort(403)
+
+    form = CsrfFixtureResetForm()
+    if not form.validate_on_submit():
+        abort(400)
+    changed = reset_fixture_proposal(proposal)
+    flash(
+        "Synthetic CSRF proposal reset to Pending."
+        if changed
+        else "Synthetic CSRF proposal is already Pending.",
+        "info",
+    )
+    return redirect(url_for("security_lab.csrf_page"))
 
 
 @bp.route("/idor", methods=["GET", "POST"])
@@ -237,6 +364,26 @@ def _sqli_demonstration(module, state):
         fixture_count=fixture_count,
         max_results=MAX_RESULTS,
         safe_payload=SAFE_SQLI_PAYLOAD,
+    )
+
+
+def _render_csrf_page(module, state, evidence=None, status_code=200):
+    """Render the CSRF lab with bounded evidence and no token values."""
+    proposal = csrf_scenario_proposal()
+    can_run = proposal is not None and current_user.id == proposal.gig.owner_id
+    return make_response(
+        render_template(
+            "security_lab/csrf.html",
+            module=module,
+            state=state,
+            proposal=proposal,
+            requester_label=LAB_CSRF_REQUESTER_LABEL,
+            target_label=LAB_CSRF_TARGET_LABEL,
+            can_run=can_run,
+            reset_form=CsrfFixtureResetForm(),
+            evidence=evidence,
+        ),
+        status_code,
     )
 
 
