@@ -1,6 +1,6 @@
 # SecureHire
 
-SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 8 adds an isolated Unrestricted File Upload demonstration. SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, and Unrestricted File Upload have vulnerable and mitigated paths; the other four vulnerability modules remain placeholders.
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 11 adds an isolated Authentication & Session Security demonstration. SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, and Authentication / Session Security have vulnerable and mitigated paths; Security Misconfiguration remains a placeholder.
 
 ## Technology
 
@@ -123,11 +123,11 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, File Upload, Path Traversal, and Clickjacking behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
+The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, File Upload, Path Traversal, Clickjacking, and Authentication / Session Security behavior, vulnerable-mode gates, object-level authorization, security headers, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, and Clickjacking demonstrations; the other module pages are placeholders.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, and Authentication / Session Security demonstrations; the remaining module page is a placeholder.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
@@ -149,6 +149,8 @@ To exercise Path Traversal, sign in with any synthetic account and open `/securi
 
 To exercise Clickjacking, sign in with any synthetic account and open `/security-lab/clickjacking`. In Mitigated mode, observe `X-Frame-Options: DENY` and `CSP: frame-ancestors 'none'` in the live headers table and verify that the browser refuses to render the framed target action. In Vulnerable mode, when the central loopback gate is open, the anti-framing headers are omitted exclusively on `/security-lab/clickjacking/target`, allowing the interactive visualizer and standalone framing test to render the target. Use the opacity slider to observe the decoy button lure ("Claim $100 Freelancer Bonus") overlaying the target action. All unrelated routes permanently retain full anti-framing protections. See [docs/security-lab/clickjacking.md](docs/security-lab/clickjacking.md).
 
+To exercise Authentication & Session Security, sign in with any synthetic account and open `/security-lab/auth-session`. In Mitigated mode, click "Simulate Consultant Login" to observe secure session rotation, invalidating the pre-auth token; click "Inspect Attacker Token Access" to verify that the pre-login kiosk token cannot access the account (`ACCESS DENIED`). Click "Simulate Consultant Logout" and then "Replay Discarded Session Token" to confirm server-side token revocation. In Vulnerable mode, when the central loopback gate is open, simulate login to observe the absence of session rotation, allowing the attacker holding the pre-auth token to achieve `SIMULATED ACCOUNT TAKEOVER`. Flawed logout leaves the session token active for replay. The demonstration modifies only the synthetic `securehire_demo_session` cookie; the real application session cookie (`session`) permanently maintains `HttpOnly=True` and `SameSite=Lax`. See [docs/security-lab/auth-session.md](docs/security-lab/auth-session.md).
+
 ## Security milestone boundary
 
-Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, and Clickjacking. The remaining two modules—authentication/session security and security misconfiguration—remain placeholders. All demonstrations operate strictly on bounded synthetic fixtures; real system files and arbitrary OS files are never accessed; and lab-run records store only bounded status values.
+Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, and Authentication / Session Security. The remaining module—security misconfiguration—remains a placeholder. All demonstrations operate strictly on bounded synthetic fixtures; real system files and arbitrary OS files are never accessed; and lab-run records store only bounded status values.

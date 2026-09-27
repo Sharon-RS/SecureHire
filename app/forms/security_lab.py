@@ -143,3 +143,26 @@ class ClickjackingTargetActionForm(FlaskForm):
 class ClickjackingResetForm(FlaskForm):
     submit = SubmitField("Reset synthetic endorsement count")
 
+
+class AuthSessionSimulateLoginForm(FlaskForm):
+    submit = SubmitField("Simulate Consultant Login")
+
+
+class AuthSessionInspectTokenForm(FlaskForm):
+    token = StringField("Session Token", validators=[Length(max=120)])
+    submit = SubmitField("Inspect Session Access")
+
+
+class AuthSessionSimulateLogoutForm(FlaskForm):
+    submit = SubmitField("Simulate Consultant Logout")
+
+
+class AuthSessionReplayTokenForm(FlaskForm):
+    token = StringField("Token to Replay", validators=[Length(max=120)])
+    submit = SubmitField("Replay Discarded Session Token")
+
+
+class AuthSessionResetForm(FlaskForm):
+    submit = SubmitField("Reset Session Scenario")
+
+

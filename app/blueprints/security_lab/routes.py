@@ -7,6 +7,11 @@ from flask_login import current_user, login_required
 
 from ...extensions import csrf as csrf_protection, db
 from ...forms.security_lab import (
+    AuthSessionInspectTokenForm,
+    AuthSessionReplayTokenForm,
+    AuthSessionResetForm,
+    AuthSessionSimulateLoginForm,
+    AuthSessionSimulateLogoutForm,
     ClickjackingResetForm,
     ClickjackingTargetActionForm,
     CsrfFixtureResetForm,
@@ -79,6 +84,33 @@ from ...services.demos.clickjacking import (
 )
 from ...services.demos.clickjacking.mitigated import get_mitigated_clickjacking_evidence
 from ...services.demos.clickjacking.vulnerable import get_vulnerable_clickjacking_evidence
+from ...services.demos.auth_session import (
+    AUTH_SESSION_COOKIE_NAME,
+    AUTH_SESSION_DEMO_DESCRIPTION,
+    AUTH_SESSION_DEMO_TITLE,
+    INITIAL_PRE_AUTH_TOKEN,
+    LAB_AUTH_SESSION_CONTRACT_SUMMARY,
+    LAB_AUTH_SESSION_USER_EMAIL,
+    LAB_AUTH_SESSION_USER_NAME,
+    LABEL_SIMULATED_TAKEOVER,
+)
+from ...services.demos.auth_session.store import (
+    get_active_session,
+    get_pre_auth_token,
+    get_session,
+    get_store_snapshot,
+    reset_auth_session_store,
+)
+from ...services.demos.auth_session.vulnerable import (
+    execute_vulnerable_inspect,
+    execute_vulnerable_login,
+    execute_vulnerable_logout,
+)
+from ...services.demos.auth_session.mitigated import (
+    execute_mitigated_inspect,
+    execute_mitigated_login,
+    execute_mitigated_logout,
+)
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -129,6 +161,8 @@ def module_detail(vulnerability_key: str):
         return _render_path_traversal_page(module, state)
     if vulnerability_key == "clickjacking":
         return _render_clickjacking_page(module, state)
+    if vulnerability_key == "auth_session":
+        return _render_auth_session_page(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
 
 
@@ -945,3 +979,241 @@ def _reflected_xss_demonstration(module, state):
         # encoding remains the mitigation; CSP is defense in depth, not the fix.
         response.headers["Content-Security-Policy"] = REFLECTED_XSS_VULNERABLE_CSP
     return response
+
+
+@bp.get("/auth-session")
+@bp.get("/auth_session")
+@login_required
+def auth_session_page():
+    """Display the isolated Authentication & Session Security lab."""
+    module = get_vulnerability("auth_session")
+    state = get_module_state("auth_session")
+    return _render_auth_session_page(module, state)
+
+
+@bp.post("/auth-session/simulate-login")
+@login_required
+def auth_session_simulate_login():
+    """Simulate logging the synthetic consultant into the session."""
+    module = get_vulnerability("auth_session")
+    state = get_module_state("auth_session")
+    form = AuthSessionSimulateLoginForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    pre_auth_token = get_pre_auth_token()
+    vulnerable = state["effective_mode"] == "vulnerable"
+    if vulnerable:
+        result = execute_vulnerable_login(pre_auth_token)
+    else:
+        result = execute_mitigated_login(pre_auth_token)
+
+    run = record_lab_run("auth_session", "passed")
+    evidence = {
+        "action": "simulate_login",
+        "effective_mode": state["effective_mode"],
+        "pre_auth_token": result.pre_auth_token,
+        "effective_token": result.effective_token,
+        "session_rotated": result.session_rotated,
+        "cookie_httponly": result.cookie_httponly,
+        "cookie_samesite": result.cookie_samesite or "None",
+        "evidence_summary": result.evidence_summary,
+        "classification": result.classification,
+        "run_result": run.result,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    return _render_auth_session_page(
+        module, state, evidence=evidence, active_token=result.effective_token
+    )
+
+
+@bp.post("/auth-session/inspect-token")
+@login_required
+def auth_session_inspect_token():
+    """Inspect what access a given synthetic session token grants."""
+    module = get_vulnerability("auth_session")
+    state = get_module_state("auth_session")
+    form = AuthSessionInspectTokenForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    token = (form.token.data or "").strip() or get_pre_auth_token()
+    vulnerable = state["effective_mode"] == "vulnerable"
+    if vulnerable:
+        inspect_result = execute_vulnerable_inspect(token)
+    else:
+        inspect_result = execute_mitigated_inspect(token)
+
+    run_result = "passed" if inspect_result.status_code == 200 else "blocked"
+    run = record_lab_run("auth_session", run_result)
+
+    evidence = {
+        "action": "inspect_token",
+        "effective_mode": state["effective_mode"],
+        "token_inspected": token,
+        "is_authenticated": inspect_result.is_authenticated,
+        "user_email": inspect_result.user_email or "None",
+        "status_code": inspect_result.status_code,
+        "status_label": inspect_result.status_label,
+        "message": inspect_result.message,
+        "simulated_account_takeover": inspect_result.simulated_account_takeover,
+        "run_result": run.result,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    return _render_auth_session_page(
+        module, state, evidence=evidence, status_code=inspect_result.status_code
+    )
+
+
+@bp.post("/auth-session/simulate-logout")
+@login_required
+def auth_session_simulate_logout():
+    """Simulate logging out the synthetic consultant."""
+    module = get_vulnerability("auth_session")
+    state = get_module_state("auth_session")
+    form = AuthSessionSimulateLogoutForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    active_session = get_active_session()
+    token = active_session.token if active_session else get_pre_auth_token()
+    vulnerable = state["effective_mode"] == "vulnerable"
+    if vulnerable:
+        logout_result = execute_vulnerable_logout(token)
+    else:
+        logout_result = execute_mitigated_logout(token)
+
+    run = record_lab_run("auth_session", "passed")
+    evidence = {
+        "action": "simulate_logout",
+        "effective_mode": state["effective_mode"],
+        "logged_out_token": logout_result.token,
+        "server_invalidated": logout_result.server_invalidated,
+        "message": logout_result.message,
+        "classification": logout_result.classification,
+        "run_result": run.result,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    return _render_auth_session_page(module, state, evidence=evidence)
+
+
+@bp.post("/auth-session/replay-token")
+@login_required
+def auth_session_replay_token():
+    """Test replaying a previously used or discarded session token."""
+    module = get_vulnerability("auth_session")
+    state = get_module_state("auth_session")
+    form = AuthSessionReplayTokenForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    token = (form.token.data or "").strip()
+    if not token:
+        active = get_active_session()
+        token = active.token if active else get_pre_auth_token()
+
+    vulnerable = state["effective_mode"] == "vulnerable"
+    if vulnerable:
+        inspect_result = execute_vulnerable_inspect(token)
+    else:
+        inspect_result = execute_mitigated_inspect(token)
+
+    run_result = "passed" if inspect_result.status_code == 200 else "blocked"
+    run = record_lab_run("auth_session", run_result)
+
+    evidence = {
+        "action": "replay_token",
+        "effective_mode": state["effective_mode"],
+        "token_replayed": token,
+        "is_authenticated": inspect_result.is_authenticated,
+        "user_email": inspect_result.user_email or "None",
+        "status_code": inspect_result.status_code,
+        "status_label": inspect_result.status_label,
+        "message": inspect_result.message,
+        "simulated_account_takeover": inspect_result.simulated_account_takeover,
+        "run_result": run.result,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    return _render_auth_session_page(
+        module, state, evidence=evidence, status_code=inspect_result.status_code
+    )
+
+
+@bp.post("/auth-session/reset")
+@login_required
+def auth_session_reset():
+    """Reset the synthetic auth & session scenario store to clean initial state."""
+    form = AuthSessionResetForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    reset_auth_session_store()
+    flash("Synthetic session scenario restored to initial unauthenticated state.", "info")
+    return redirect(url_for("security_lab.auth_session_page"))
+
+
+def _render_auth_session_page(
+    module, state, evidence=None, active_token=None, status_code=200
+):
+    """Render the Auth & Session Security lab page and attach demonstration cookie."""
+    snapshot = get_store_snapshot()
+    login_form = AuthSessionSimulateLoginForm()
+    inspect_form = AuthSessionInspectTokenForm()
+    logout_form = AuthSessionSimulateLogoutForm()
+    replay_form = AuthSessionReplayTokenForm()
+    reset_form = AuthSessionResetForm()
+
+    if not inspect_form.token.data:
+        inspect_form.token.data = snapshot["pre_auth_token"]
+    if not replay_form.token.data:
+        active = snapshot.get("active_session")
+        replay_form.token.data = active["token"] if active else snapshot["pre_auth_token"]
+
+    vulnerable = state["effective_mode"] == "vulnerable"
+    current_token = (
+        active_token
+        or (snapshot["active_session"]["token"] if snapshot.get("active_session") else snapshot["pre_auth_token"])
+    )
+
+    response = make_response(
+        render_template(
+            "security_lab/auth_session.html",
+            module=module,
+            state=state,
+            snapshot=snapshot,
+            login_form=login_form,
+            inspect_form=inspect_form,
+            logout_form=logout_form,
+            replay_form=replay_form,
+            reset_form=reset_form,
+            evidence=evidence,
+            current_token=current_token,
+            cookie_name=AUTH_SESSION_COOKIE_NAME,
+            consultant_name=LAB_AUTH_SESSION_USER_NAME,
+            consultant_email=LAB_AUTH_SESSION_USER_EMAIL,
+            contracts_summary=LAB_AUTH_SESSION_CONTRACT_SUMMARY,
+        ),
+        status_code,
+    )
+
+    # Attach the synthetic demonstration cookie ONLY to responses from this lab endpoint.
+    # CRITICAL ISOLATION: This never alters or interferes with the real Flask session cookie ("session").
+    if vulnerable:
+        response.set_cookie(
+            AUTH_SESSION_COOKIE_NAME,
+            current_token,
+            path="/security-lab/auth-session",
+            httponly=False,
+            samesite=None,
+        )
+    else:
+        response.set_cookie(
+            AUTH_SESSION_COOKIE_NAME,
+            current_token,
+            path="/security-lab/auth-session",
+            httponly=True,
+            samesite="Lax",
+        )
+
+    return response
+

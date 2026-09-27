@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Authentication & Session Security Lab - SecureHire{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2 mb-4" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">Session fixation and server-side invalidation omission are active strictly within this isolated synthetic scenario and behind the centralized lab safety gate.</p>
+</div>
+{% endif %}
+
+<nav aria-label="Breadcrumb" class="mb-3">
+  <a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+</nav>
+
+<div class="row justify-content-center">
+  <div class="col-xl-10">
+    <article class="card shadow-sm mb-4">
+      <div class="card-body p-4 p-lg-5">
+        <p class="eyebrow mb-1">Security Demonstration</p>
+        <h1 class="h2 mb-2">Authentication & Session Security</h1>
+        <p class="lead text-secondary">
+          Explores how flaws in session lifecycle management—including <strong>Session Fixation (CWE-384)</strong>, 
+          <strong>Insufficient Session Invalidation on Logout (CWE-613)</strong>, and 
+          <strong>Insecure Cookie Attributes (CWE-1004 / CWE-614)</strong>—can enable account takeover without cracking passwords.
+        </p>
+
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %} fs-6">
+            Effective mode: {{ state.effective_mode|upper }}
+          </span>
+          <span class="badge text-bg-light border text-dark fs-6">
+            Protection: {{ state.protection_status }}
+          </span>
+        </div>
+
+        <!-- Scenario Context Card -->
+        <section class="alert alert-light border mb-4" aria-labelledby="scenario-heading">
+          <p class="eyebrow mb-1">SCENARIO</p>
+          <h2 class="h5" id="scenario-heading">Shared Freelance Kiosk / Co-Working Workstation</h2>
+          <p class="small text-secondary mb-2">
+            In freelance marketplaces, independent contractors frequently access their accounts from shared workstations, 
+            co-working kiosks, or libraries. An attacker visits the machine first, notes or plants an unauthenticated session 
+            token, and waits for a victim to log in.
+          </p>
+          <div class="border rounded p-3 bg-white">
+            <dl class="row small mb-0">
+              <dt class="col-sm-4 text-secondary">Synthetic Consultant</dt>
+              <dd class="col-sm-8 fw-semibold">{{ consultant_name }} (<code>{{ consultant_email }}</code>)</dd>
+              <dt class="col-sm-4 text-secondary">Synthetic Account Assets</dt>
+              <dd class="col-sm-8">{{ contracts_summary }}</dd>
+              <dt class="col-sm-4 text-secondary">Pre-Auth Kiosk Token</dt>
+              <dd class="col-sm-8"><code>{{ snapshot.pre_auth_token }}</code></dd>
+            </dl>
+          </div>
+        </section>
+
+        <!-- Live Evidence / Diagnostic Feedback Box (if an action was executed) -->
+        {% if evidence %}
+        <section class="border rounded p-3 p-md-4 mb-4 bg-light" aria-labelledby="evidence-heading">
+          <p class="eyebrow mb-1">OBSERVED EVIDENCE</p>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h5 mb-0" id="evidence-heading">Lab Execution Diagnostics</h2>
+            <span class="badge {% if evidence.status_label == 'SIMULATED ACCOUNT TAKEOVER' or evidence.classification == 'SESSION FIXATION VULNERABILITY (NO ROTATION)' %}text-bg-danger{% elif evidence.status_code == 200 or evidence.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-secondary{% endif %} fs-6">
+              {{ evidence.status_label or evidence.classification }}
+            </span>
+          </div>
+
+          {% if evidence.simulated_account_takeover %}
+          <div class="alert alert-danger mb-3" role="alert">
+            <h3 class="h6 fw-bold mb-1">&#9888; SIMULATED ACCOUNT TAKEOVER DETECTED</h3>
+            <p class="small mb-0">{{ evidence.message }}</p>
+          </div>
+          {% elif evidence.message %}
+          <div class="alert {% if evidence.status_code == 200 %}alert-info{% else %}alert-secondary{% endif %} mb-3" role="status">
+            <p class="small mb-0">{{ evidence.message }}</p>
+          </div>
+          {% endif %}
+
+          <dl class="row small mb-0">
+            <dt class="col-sm-4 text-secondary">Action Executed</dt>
+            <dd class="col-sm-8"><code>{{ evidence.action }}</code></dd>
+            <dt class="col-sm-4 text-secondary">Effective Mode</dt>
+            <dd class="col-sm-8 fw-semibold text-uppercase">{{ evidence.effective_mode }}</dd>
+            {% if evidence.pre_auth_token %}
+            <dt class="col-sm-4 text-secondary">Pre-Auth Token</dt>
+            <dd class="col-sm-8"><code>{{ evidence.pre_auth_token }}</code></dd>
+            <dt class="col-sm-4 text-secondary">Post-Login Token</dt>
+            <dd class="col-sm-8"><code>{{ evidence.effective_token }}</code></dd>
+            <dt class="col-sm-4 text-secondary">Session Rotated?</dt>
+            <dd class="col-sm-8">
+              {% if evidence.session_rotated %}
+              <span class="badge text-bg-success">YES (Rotated & Protected)</span>
+              {% else %}
+              <span class="badge text-bg-danger">NO (Reused - Session Fixation)</span>
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4 text-secondary">Cookie HttpOnly</dt>
+            <dd class="col-sm-8">{{ "True (Protected)" if evidence.cookie_httponly else "False (Vulnerable - Accessible to JavaScript)" }}</dd>
+            <dt class="col-sm-4 text-secondary">Cookie SameSite</dt>
+            <dd class="col-sm-8">{{ evidence.cookie_samesite }}</dd>
+            {% endif %}
+            {% if evidence.token_inspected %}
+            <dt class="col-sm-4 text-secondary">Token Inspected</dt>
+            <dd class="col-sm-8"><code>{{ evidence.token_inspected }}</code></dd>
+            <dt class="col-sm-4 text-secondary">Access Granted?</dt>
+            <dd class="col-sm-8 fw-semibold">{{ "YES (Authenticated)" if evidence.is_authenticated else "NO (Unauthorized / Blocked)" }}</dd>
+            {% endif %}
+            {% if evidence.logged_out_token %}
+            <dt class="col-sm-4 text-secondary">Logged-Out Token</dt>
+            <dd class="col-sm-8"><code>{{ evidence.logged_out_token }}</code></dd>
+            <dt class="col-sm-4 text-secondary">Server Invalidated?</dt>
+            <dd class="col-sm-8">
+              {% if evidence.server_invalidated %}
+              <span class="badge text-bg-success">YES (Revoked on Server)</span>
+              {% else %}
+              <span class="badge text-bg-danger">NO (Server Token Persists)</span>
+              {% endif %}
+            </dd>
+            {% endif %}
+            <dt class="col-sm-4 text-secondary">Run Status</dt>
+            <dd class="col-sm-8"><span class="badge text-bg-dark">{{ evidence.run_result }}</span></dd>
+            <dt class="col-sm-4 text-secondary">Recorded At</dt>
+            <dd class="col-sm-8">{{ evidence.timestamp }}</dd>
+          </dl>
+        </section>
+        {% endif %}
+
+        <!-- Interactive Simulation Panels -->
+        <div class="row g-4 mb-4">
+          <!-- Column 1: Attacker Perspective -->
+          <div class="col-lg-6">
+            <section class="card h-100 border-primary" aria-labelledby="attacker-panel-heading">
+              <div class="card-header bg-primary text-white py-2">
+                <span class="small text-uppercase fw-bold">Actor 1: Attacker (Kiosk Sitter)</span>
+              </div>
+              <div class="card-body d-flex flex-column">
+                <h3 class="h6 card-title mb-2" id="attacker-panel-heading">Pre-Authentication Token Hold</h3>
+                <p class="small text-secondary mb-3">
+                  The attacker recorded the pre-login token before Alex sat down. Click below to inspect what access this token grants.
+                </p>
+                
+                <div class="border rounded p-2 bg-light mb-3">
+                  <div class="small text-muted mb-1">Pre-Auth Trap Token:</div>
+                  <code class="small text-break">{{ snapshot.pre_auth_token }}</code>
+                </div>
+
+                <form method="post" action="{{ url_for('security_lab.auth_session_inspect_token') }}" class="mt-auto">
+                  {{ inspect_form.hidden_tag() }}
+                  <input type="hidden" name="token" value="{{ snapshot.pre_auth_token }}">
+                  <button class="btn btn-outline-primary w-100" type="submit">
+                    &#128269; Inspect Attacker Token Access
+                  </button>
+                </form>
+              </div>
+            </section>
+          </div>
+
+          <!-- Column 2: Victim Perspective -->
+          <div class="col-lg-6">
+            <section class="card h-100 border-secondary" aria-labelledby="victim-panel-heading">
+              <div class="card-header bg-dark text-white py-2">
+                <span class="small text-uppercase fw-bold">Actor 2: Victim (Alex Rivers)</span>
+              </div>
+              <div class="card-body d-flex flex-column gap-3">
+                <div>
+                  <h3 class="h6 card-title mb-1" id="victim-panel-heading">Session Lifecycle Simulation</h3>
+                  <p class="small text-secondary mb-2">Simulate Alex signing in and out on this shared kiosk.</p>
+                </div>
+
+                <div class="border rounded p-3 bg-light">
+                  <div class="fw-semibold small mb-1">Step 1: Consultant Login</div>
+                  <p class="small text-secondary mb-2">
+                    In <strong>Mitigated</strong> mode, the server rotates the session ID. In <strong>Vulnerable</strong> mode, the pre-auth token is reused.
+                  </p>
+                  <form method="post" action="{{ url_for('security_lab.auth_session_simulate_login') }}">
+                    {{ login_form.hidden_tag() }}
+                    <button class="btn btn-success w-100 btn-sm" type="submit">
+                      &#128273; Simulate Consultant Login
+                    </button>
+                  </form>
+                </div>
+
+                <div class="border rounded p-3 bg-light">
+                  <div class="fw-semibold small mb-1">Step 2: Consultant Logout</div>
+                  <p class="small text-secondary mb-2">
+                    In <strong>Mitigated</strong> mode, the server revokes the token. In <strong>Vulnerable</strong> mode, the server fails to invalidate it.
+                  </p>
+                  <form method="post" action="{{ url_for('security_lab.auth_session_simulate_logout') }}">
+                    {{ logout_form.hidden_tag() }}
+                    <button class="btn btn-warning w-100 btn-sm" type="submit">
+                      &#128274; Simulate Consultant Logout
+                    </button>
+                  </form>
+                </div>
+
+                <div class="border rounded p-3 bg-light">
+                  <div class="fw-semibold small mb-1">Step 3: Stale Token Replay</div>
+                  <p class="small text-secondary mb-2">
+                    Test replaying the discarded session token after logout to verify server-side expiration.
+                  </p>
+                  <form method="post" action="{{ url_for('security_lab.auth_session_replay_token') }}">
+                    {{ replay_form.hidden_tag() }}
+                    <input type="hidden" name="token" value="{{ current_token }}">
+                    <button class="btn btn-outline-danger w-100 btn-sm" type="submit">
+                      &#9851; Replay Discarded Session Token
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Demonstration Cookie Inspector Table -->
+        <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="cookies-heading">
+          <p class="eyebrow mb-1">COOKIE SECURITY ATTRIBUTES</p>
+          <h2 class="h5" id="cookies-heading">Live Demonstration vs Production Cookie Comparison</h2>
+          <p class="small text-secondary mb-3">
+            In accordance with SecureHire isolation rules, the vulnerability demonstration modifies only the 
+            synthetic <code>{{ cookie_name }}</code> cookie scoped to <code>/security-lab/auth-session</code>. 
+            The real Flask session cookie (<code>session</code>) retains full production protections in both modes.
+          </p>
+
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm align-middle small mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Cookie Name</th>
+                  <th>Scope / Path</th>
+                  <th>HttpOnly Flag</th>
+                  <th>SameSite Attribute</th>
+                  <th>Mode Behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>{{ cookie_name }}</code><br><span class="badge text-bg-info">Lab Demo Cookie</span></td>
+                  <td><code>/security-lab/auth-session</code></td>
+                  <td>
+                    {% if state.effective_mode == 'vulnerable' %}
+                    <span class="badge text-bg-danger">Missing (Accessible via JS)</span>
+                    {% else %}
+                    <span class="badge text-bg-success">True (Protected)</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if state.effective_mode == 'vulnerable' %}
+                    <span class="badge text-bg-danger">None / Missing</span>
+                    {% else %}
+                    <span class="badge text-bg-success">Lax</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if state.effective_mode == 'vulnerable' %}
+                    <span class="text-danger fw-semibold">Vulnerable Demo Mode</span>
+                    {% else %}
+                    <span class="text-success fw-semibold">Mitigated Mode</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>session</code><br><span class="badge text-bg-dark">Real SecureHire App</span></td>
+                  <td><code>/</code> (All routes)</td>
+                  <td><span class="badge text-bg-success">True (HttpOnly)</span></td>
+                  <td><span class="badge text-bg-success">Lax</span></td>
+                  <td><span class="text-success fw-semibold">Permanent Global Protection</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Reset Fixture Form -->
+        <section class="d-flex justify-content-between align-items-center pt-2 border-top">
+          <span class="small text-secondary">Restore the synthetic scenario to initial unauthenticated state:</span>
+          <form method="post" action="{{ url_for('security_lab.auth_session_reset') }}">
+            {{ reset_form.hidden_tag() }}
+            <button class="btn btn-outline-secondary btn-sm" type="submit">
+              &#10227; Reset Session Scenario
+            </button>
+          </form>
+        </section>
+
+      </div>
+    </article>
+  </div>
+</div>
+{% endblock %}
