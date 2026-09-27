@@ -185,7 +185,12 @@ def test_stored_xss_is_functional_and_other_module_remains_a_placeholder(app):
     reflected = client.get("/security-lab/reflected-xss")
     assert reflected.status_code == 200
     assert b"ATTACK INPUT" in reflected.data
+    idor = client.get("/security-lab/idor")
+    assert idor.status_code == 200
+    assert b"IDOR / BOLA" in idor.data
+    assert b"Demonstration not implemented yet." not in idor.data
     assert client.get("/security-lab/idor_bola").status_code == 200
+    assert b"Demonstration not implemented yet." in client.get("/security-lab/csrf").data
     assert client.get("/security-lab/not-a-real-module").status_code == 404
 
 

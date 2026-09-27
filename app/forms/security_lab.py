@@ -11,6 +11,15 @@ from ..services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
 from ..services.demos.reflected_xss import APPROVED_REFLECTED_XSS_PAYLOAD
 
 
+class IdorBolaReadForm(FlaskForm):
+    target_proposal_id = SelectField(
+        "Synthetic proposal",
+        coerce=int,
+        validators=[DataRequired()],
+    )
+    submit = SubmitField("Read proposal")
+
+
 class SecurityModeForm(FlaskForm):
     mode = SelectField(
         "Stored mode",

@@ -1,6 +1,6 @@
 # SecureHire
 
-SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 5 adds an isolated Reflected XSS demonstration. SQL Injection, Stored XSS, and Reflected XSS have vulnerable and mitigated paths; the other seven vulnerability modules remain placeholders.
+SecureHire is a localhost-only academic freelance marketplace with a Security Lab framework. Milestone 6 adds an isolated IDOR/BOLA demonstration. SQL Injection, Stored XSS, Reflected XSS, and IDOR/BOLA have vulnerable and mitigated paths; the other six vulnerability modules remain placeholders.
 
 ## Technology
 
@@ -100,9 +100,10 @@ The seed command reads SECUREHIRE_DEMO_PASSWORD from the local .env, hashes it b
 |---|---|
 | Admin | admin@example.test |
 | Buyer | buyer@example.test |
-| Freelancer | freelancer@example.test |
+| Freelancer A | freelancer@example.test |
+| Lab Freelancer B | lab-freelancer-b@example.test |
 
-All three use the local-only value you assign to SECUREHIRE_DEMO_PASSWORD (for example, SecureHire-Demo-Only-2026!). These are synthetic development accounts, not production credentials.
+All four use the local-only value you assign to SECUREHIRE_DEMO_PASSWORD (for example, SecureHire-Demo-Only-2026!). These are synthetic development accounts, not production credentials.
 
 ## Run the application
 
@@ -122,11 +123,11 @@ python -m pytest
 
 To exercise tests against MySQL, create a separate empty test database and set TEST_DATABASE_URL to that database. Never point it at securehire_dev or any shared/production database.
 
-The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, and Reflected XSS behavior, vulnerable-mode gates, authorization, CSRF, security headers, and payload-free lab-run records.
+The test suite covers normal reviews, marketplace isolation, SQLi, Stored XSS, Reflected XSS, and IDOR/BOLA behavior, vulnerable-mode gates, object-level authorization, CSRF, security headers, and payload-free lab-run records.
 
 ## Security Lab framework
 
-The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, and Reflected XSS demonstrations; the other module pages are placeholders.
+The authenticated **Admin** account can open `/security-lab`. Buyers and freelancers cannot access the control dashboard or change modes. Authenticated users can run the SQL Injection, Stored XSS, Reflected XSS, and IDOR/BOLA demonstrations; the other module pages are placeholders.
 
 After applying migrations and seeding synthetic accounts, sign in as `admin@example.test` using the local-only `SECUREHIRE_DEMO_PASSWORD` value. The dashboard starts with every module effectively **MITIGATED**. Mode selections are stored server-side and written to `security_audit_log`; each module is changed independently.
 
@@ -136,8 +137,10 @@ To exercise SQL Injection, set `LAB_ENABLE=true` in the local `.env`, restart th
 
 To exercise Stored XSS, select Vulnerable for Stored XSS and open `/security-lab/stored-xss`. Submit the exact harmless value shown on the page; in effectively vulnerable mode, the isolated lab result displays the local alert. Set Stored XSS to Mitigated and reload to see the same stored value displayed as text. Normal marketplace reviews remain escaped in either mode. Set the stored mode back to Mitigated and `LAB_ENABLE=false` when finished. See [docs/security-lab/stored-xss.md](docs/security-lab/stored-xss.md) for isolation, behavior, evidence, and test coverage.
 
-To exercise Reflected XSS, select Vulnerable for Reflected XSS and open `/security-lab/reflected-xss`. Submit the approved harmless local payload to see its response-only reflection; when vulnerable mode is effective, the page can display the local alert. Select Mitigated and submit the same input to see it encoded as text. The CSP exception is scoped to only the vulnerable response containing that approved input. Normal marketplace search stays secure in either mode. Return the stored setting to Mitigated and set `LAB_ENABLE=false` when finished. See [docs/security-lab/reflected-xss.md](docs/security-lab/reflected-xss.md).
+To exercise Reflected XSS, select Vulnerable for Reflected XSS and open /security-lab/reflected-xss. Submit the approved harmless local payload to see its response-only reflection; when vulnerable mode is effective, the page can display the local alert. Select Mitigated and submit the same input to see it encoded as text. The CSP exception is scoped to only the vulnerable response containing that approved input. Normal marketplace search stays secure in either mode. Return the stored setting to Mitigated and set LAB_ENABLE=false when finished. See docs/security-lab/reflected-xss.md.
+
+To exercise IDOR/BOLA, run the synthetic seed command and sign in as Freelancer A or Lab Freelancer B. Open /security-lab/idor and request the other synthetic freelancer’s proposal. In Vulnerable mode, with the central loopback lab gate open, the isolated page returns bounded synthetic proposal fields and records only the run status. In Mitigated mode, a cross-user request returns HTTP 403 without proposal contents, while the signed-in user can still read their own. The normal /proposals/<id> marketplace route keeps its object-level authorization in both modes. No proposal data is modified. See docs/security-lab/idor-bola.md.
 
 ## Security milestone boundary
 
-Implemented demonstrations: SQL Injection, Stored XSS, and Reflected XSS. The remaining seven modules—IDOR/BOLA, CSRF, file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The Security Lab administration interface retains CSRF protection independently of the CSRF demonstration. Lab run records accept only bounded status values and do not store request payloads.
+Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, and IDOR/BOLA. The remaining six modules—CSRF, file upload, path traversal, clickjacking, authentication/session security, and security misconfiguration—remain placeholders. The Security Lab administration interface retains CSRF protection independently of the CSRF demonstration. Lab run records accept only bounded status values and do not store request payloads.

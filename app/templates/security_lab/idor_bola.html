@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}IDOR / BOLA{% endblock %}
+{% block content %}
+{% if state.is_effectively_vulnerable %}
+<div class="alert alert-danger border-danger border-2" role="alert">
+  <div class="fw-bold fs-5">EDUCATIONAL LAB MODE</div>
+  <div class="fw-bold">VULNERABLE IMPLEMENTATION ENABLED</div>
+  <div class="fw-bold">LOCALHOST ONLY</div>
+  <p class="mb-0 mt-2">This deliberately vulnerable read is available only through the server-side lab gate and fixed synthetic fixtures.</p>
+</div>
+{% endif %}
+<a class="small text-decoration-none" href="{{ url_for('security_lab.dashboard') }}">&#8592; Security Lab dashboard</a>
+<div class="row justify-content-center mt-3"><div class="col-xl-9">
+  <article class="card shadow-sm mb-4"><div class="card-body p-4 p-lg-5">
+    <p class="eyebrow">Security demonstration</p>
+    <h1 class="h2">IDOR / BOLA</h1>
+    <p class="lead text-secondary">Insecure Direct Object Reference (IDOR), also called Broken Object Level Authorization (BOLA), occurs when a server accepts an object identifier without checking whether the authenticated user may access that object.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge {% if state.effective_mode == 'mitigated' %}text-bg-success{% else %}text-bg-danger{% endif %}">Effective mode: {{ state.effective_mode|upper }}</span>
+      <span class="badge text-bg-light border text-dark">Protection: {{ state.protection_status }}</span>
+    </div>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="request-heading">
+      <p class="eyebrow mb-1">CONTROLLED REQUEST</p><h2 class="h5" id="request-heading">Read a synthetic proposal</h2>
+      <p class="text-secondary">Authenticated requester: <strong>{{ requester }}</strong>. Choose one of the two proposals in the closed, synthetic lab gig. This form uses POST and retains CSRF protection.</p>
+      {% if scenario_ready %}
+      <form method="post" action="{{ url_for('security_lab.idor_bola_page') }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          {{ form.target_proposal_id.label(class_="form-label fw-semibold") }}
+          {{ form.target_proposal_id(class_="form-select") }}
+          {% for error in form.target_proposal_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        {{ form.submit(class_="btn btn-primary") }}
+      </form>
+      {% else %}
+      <div class="alert alert-warning mb-0" role="status">Synthetic proposal fixtures are not ready. Apply migrations and run the documented synthetic seed command; this page will not create or modify fixture data.</div>
+      {% endif %}
+      <p class="small text-secondary mt-3 mb-0">The lab accepts only proposal IDs from its fixed fixture. It does not accept a requester ID or mode from the browser.</p>
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="result-heading">
+      <p class="eyebrow mb-1">SECURITY RESULT</p><h2 class="h5" id="result-heading">Request evidence</h2>
+      {% if evidence %}
+      <dl class="row small mb-3">
+        <dt class="col-sm-5">Effective mode</dt><dd class="col-sm-7">{{ evidence.effective_mode|upper }}</dd>
+        <dt class="col-sm-5">Authenticated requester</dt><dd class="col-sm-7">{{ evidence.requester }}</dd>
+        <dt class="col-sm-5">Selected proposal owner</dt><dd class="col-sm-7">{{ evidence.target_owner }}</dd>
+        <dt class="col-sm-5">Authorization decision</dt><dd class="col-sm-7 fw-bold">{{ evidence.decision }}</dd>
+        <dt class="col-sm-5">HTTP result</dt><dd class="col-sm-7">{{ evidence.http_status }}</dd>
+        <dt class="col-sm-5">Lab run status</dt><dd class="col-sm-7">{{ evidence.run_result|upper }} (status only)</dd>
+      </dl>
+      <div class="alert {% if evidence.decision == 'ALLOWED' %}alert-info{% else %}alert-warning{% endif %}" role="status">{{ evidence.finding }}</div>
+      {% if proposal_result %}
+      <h3 class="h6">Bounded synthetic proposal data</h3>
+      <dl class="row small mb-0">
+        <dt class="col-sm-5">Fixture proposal ID</dt><dd class="col-sm-7">{{ proposal_result.proposal_id }}</dd>
+        <dt class="col-sm-5">Gig</dt><dd class="col-sm-7">{{ proposal_result.gig_title }}</dd>
+        <dt class="col-sm-5">Proposal cover letter</dt><dd class="col-sm-7">{{ proposal_result.cover_letter }}</dd>
+        <dt class="col-sm-5">Proposed price</dt><dd class="col-sm-7">{{ proposal_result.proposed_price }}</dd>
+        <dt class="col-sm-5">Timeline</dt><dd class="col-sm-7">{{ proposal_result.timeline }}</dd>
+        <dt class="col-sm-5">Status</dt><dd class="col-sm-7">{{ proposal_result.status|title }}</dd>
+      </dl>
+      {% elif evidence.decision == 'DENIED' %}
+      <p class="small mb-0">No proposal contents were returned for this request.</p>
+      {% endif %}
+      {% else %}
+      <p class="text-secondary mb-0">Submit a fixture proposal request to see the HTTP status and authorization result. Run records store only the bounded status and mode.</p>
+      {% endif %}
+    </section>
+
+    <section class="border rounded p-3 p-md-4 mb-4" aria-labelledby="attack-heading">
+      <p class="eyebrow mb-1">ATTACK AND ISOLATION</p><h2 class="h5" id="attack-heading">Changing an object reference</h2>
+      <p class="mb-2">The vulnerable path uses the submitted proposal ID to read one of two synthetic proposals but intentionally skips the comparison between that proposal’s freelancer and the authenticated requester. In vulnerable mode, Freelancer A can read Freelancer B’s bounded fixture proposal.</p>
+      <p class="small text-secondary mb-0">The vulnerable path is read-only, limited to this fixture allowlist, and is reachable only when the stored mode, explicit lab-enable flag, nonproduction environment, loopback peer, and local-host request gate all permit it. It never changes the normal marketplace proposal route.</p>
+    </section>
+
+    <section class="border rounded p-3 p-md-4" aria-labelledby="mitigation-heading">
+      <p class="eyebrow mb-1">MITIGATION</p><h2 class="h5" id="mitigation-heading">Authorize every object against the session user</h2>
+      <p class="mb-2">Mitigated mode derives the requester from the authenticated server-side session and checks that the selected proposal belongs to that user. The requester ID is never accepted from the form. A cross-user lab request receives HTTP 403 with no proposal contents; a request for the user’s own proposal remains available.</p>
+      <p class="small text-secondary mb-0">Normal marketplace proposal pages always keep their existing object-level authorization checks in either lab mode. The demonstration does not alter or bypass them.</p>
+    </section>
+  </div></article>
+</div></div>
+{% endblock %}

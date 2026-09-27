@@ -7,6 +7,7 @@ from flask_login import current_user, login_required
 
 from ...extensions import db
 from ...forms.security_lab import (
+    IdorBolaReadForm,
     ReflectedXssSearchForm,
     SQLiSearchForm,
     SecurityModeForm,
@@ -25,6 +26,9 @@ from ...services.demos.stored_xss import APPROVED_STORED_XSS_PAYLOAD
 from ...services.demos.stored_xss.mitigated import render_mitigated_demo_value
 from ...services.demos.stored_xss.records import store_demo_value, stored_demo_for_user
 from ...services.demos.stored_xss.vulnerable import render_vulnerable_demo_value
+from ...services.demos.idor_bola.mitigated import read_proposal_mitigated
+from ...services.demos.idor_bola.scenario import persona_label_for_email, scenario_proposals
+from ...services.demos.idor_bola.vulnerable import read_proposal_vulnerable
 from ...services.security_modes import (
     InvalidSecurityMode,
     UnknownVulnerabilityKey,
@@ -65,7 +69,18 @@ def module_detail(vulnerability_key: str):
         return _stored_xss_demonstration(module, state)
     if vulnerability_key == "reflected_xss":
         return _reflected_xss_demonstration(module, state)
+    if vulnerability_key == "idor_bola":
+        return _idor_bola_demonstration(module, state)
     return render_template("security_lab/detail.html", module=module, state=state)
+
+
+@bp.route("/idor", methods=["GET", "POST"])
+@login_required
+def idor_bola_page():
+    """Canonical read-only IDOR/BOLA page; mode is resolved server-side."""
+    module = get_vulnerability("idor_bola")
+    state = get_module_state("idor_bola")
+    return _idor_bola_demonstration(module, state)
 
 
 @bp.get("/stored-xss")
@@ -222,6 +237,90 @@ def _sqli_demonstration(module, state):
         fixture_count=fixture_count,
         max_results=MAX_RESULTS,
         safe_payload=SAFE_SQLI_PAYLOAD,
+    )
+
+
+def _idor_bola_demonstration(module, state):
+    """Run the isolated proposal lookup and display bounded security evidence."""
+    proposals = scenario_proposals()
+    form = IdorBolaReadForm()
+    form.target_proposal_id.choices = [
+        (str(proposal.id), f"{persona_label_for_email(proposal.freelancer.email)} — synthetic proposal")
+        for proposal in proposals
+    ]
+    if request.method == "GET" and proposals:
+        suggested = next(
+            (proposal for proposal in proposals if proposal.freelancer_id != current_user.id),
+            proposals[0],
+        )
+        form.target_proposal_id.data = suggested.id
+
+    requester = persona_label_for_email(current_user.email)
+    selected_owner = None
+    proposal_result = None
+    evidence = None
+    response_status = 200
+
+    if request.method == "POST" and not proposals:
+        response_status = 503
+    elif request.method == "POST":
+        if not form.validate_on_submit():
+            response_status = 400
+        else:
+            target_id = form.target_proposal_id.data
+            selected = next((proposal for proposal in proposals if proposal.id == target_id), None)
+            if selected is None:
+                response_status = 400
+            else:
+                selected_owner = persona_label_for_email(selected.freelancer.email)
+                is_cross_user = selected.freelancer_id != current_user.id
+                if state["effective_mode"] == "vulnerable":
+                    proposal_result = read_proposal_vulnerable(target_id, proposals)
+                    allowed = proposal_result is not None
+                else:
+                    decision = read_proposal_mitigated(target_id, current_user.id, proposals)
+                    proposal_result = decision.proposal
+                    allowed = decision.allowed
+
+                response_status = 200 if allowed else 403
+                if state["effective_mode"] == "vulnerable":
+                    finding = (
+                        "The isolated lookup returned another synthetic user's proposal because "
+                        "it intentionally omitted the object-owner authorization check."
+                        if is_cross_user and allowed
+                        else "The synthetic proposal was read through the isolated vulnerable lookup."
+                    )
+                elif allowed:
+                    finding = "The server confirmed that the authenticated requester owns this proposal."
+                else:
+                    finding = (
+                        "The server denied the cross-user request before returning proposal contents."
+                    )
+
+                run = record_lab_run("idor_bola", "passed")
+                evidence = {
+                    "effective_mode": state["effective_mode"],
+                    "requester": requester,
+                    "target_owner": selected_owner,
+                    "decision": "ALLOWED" if allowed else "DENIED",
+                    "http_status": response_status,
+                    "finding": finding,
+                    "run_result": run.result,
+                }
+
+    return make_response(
+        render_template(
+            "security_lab/idor_bola.html",
+            module=module,
+            state=state,
+            form=form,
+            scenario_ready=len(proposals) == 2,
+            requester=requester,
+            selected_owner=selected_owner,
+            proposal_result=proposal_result,
+            evidence=evidence,
+        ),
+        response_status,
     )
 
 
