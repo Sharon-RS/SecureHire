@@ -24,6 +24,12 @@ dev = ["pytest>=8.0,<9.0"]
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+app = [
+    "templates/**/*",
+    "static/**/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
