@@ -19,6 +19,7 @@ jobs:
 
     env:
       LAB_ENABLE: "true"
+      APP_ENV: "testing"
 
     steps:
       - name: Checkout source code
