@@ -17,6 +17,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      LAB_ENABLE: "true"
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v6
