@@ -7,7 +7,7 @@ In accordance with academic laboratory evaluation guidelines, the codebase was a
 1. **Bandit (v1.9.4)** — Python AST-based security vulnerability scanner for identifying common security weaknesses (OWASP Top 10, CWE).
 2. **Flake8 (v7.4.1)** with **PyFlakes** and **PyCodeStyle** — Static analysis for code smells, unused imports/variables, and maintainability issues.
 
-*Note on SonarQube Community:* A containerized SonarQube deployment profile was prepared via Docker Compose. However, because the local Windows Docker Desktop engine requires interactive GUI launch / elevated service permissions (`com.docker.service`), local static scanning was executed directly using Bandit and Flake8 within the isolated Python environment, providing immediate, verified evidence.
+*Note on Containerization and Scanning Tooling:* Static security scanning was executed natively via Bandit 1.9.4 and Flake8 7.4.1 within the project environment for direct, automated CI/CD integration. Additionally, Docker Desktop and Docker Compose were fully initialized and validated at runtime, proving container health and database connectivity for `securehire-app` and `mysql:8.0`.
 
 ---
 

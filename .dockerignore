@@ -15,4 +15,3 @@ build
 instance/*
 !instance/.gitkeep
 node_modules
-app/static/vendor/bootstrap

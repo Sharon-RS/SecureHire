@@ -1,14 +1,4 @@
-# syntax=docker/dockerfile:1
-
-# Stage 1: Front-end vendor assets compilation (Bootstrap 5)
-FROM node:20-slim AS assets
-WORKDIR /build
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY scripts/copy_bootstrap.mjs ./scripts/
-RUN node scripts/copy_bootstrap.mjs
-
-# Stage 2: SecureHire Python Runtime
+# SecureHire Python Runtime (Single-stage, zero Node.js/npm build dependency)
 FROM python:3.12-slim
 WORKDIR /app
 
@@ -24,11 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 COPY requirements.txt ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy application source code
+# Copy application source code (including vendored static assets in app/static/vendor/bootstrap)
 COPY . .
-
-# Copy Bootstrap vendor assets from Stage 1 into the application's static directory
-COPY --from=assets /build/app/static/vendor/bootstrap ./app/static/vendor/bootstrap
 
 # Install the package in editable mode
 RUN pip install --no-deps -e .

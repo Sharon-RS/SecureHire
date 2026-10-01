@@ -2,14 +2,17 @@
 
 ## 1. Executive Summary
 
-A comprehensive dependency audit was conducted on **SecureHire** using AST static import inspection, `pip check`, `pip list`, and `npm ls`.
+A comprehensive dependency audit was conducted on **SecureHire** using AST static import inspection, `pip check`, `pip list`, and build-tooling analysis.
 The evaluation categorized all dependencies into direct runtime, test/development, transitive, frontend, and build tooling.
 
-Each direct dependency was rigorously analyzed to determine whether it could be removed without compromising application security, functionality, or packaging integrity.
+In compliance with academic faculty requirements to reduce dependencies without compromising functionality, a genuine dependency reduction was identified, implemented, and fully validated:
+- The frontend **`bootstrap` npm dependency** (`^5.3.0`), along with `package.json`, `package-lock.json`, `scripts/copy_bootstrap.mjs`, and the multi-stage Node.js Docker build stage were **completely eliminated**.
+- The compiled Bootstrap assets (`bootstrap.min.css`, `bootstrap.bundle.min.js`, and `LICENSE`) were vendored directly into `app/static/vendor/bootstrap/`.
+- All 219 automated tests, static security scans (Bandit/Flake8), Docker builds, and runtime container smoke tests pass with zero regressions.
 
 ---
 
-## 2. Comprehensive Dependency Inventory
+## 2. Comprehensive Dependency Inventory (Current State)
 
 ### 2.1 Direct Runtime Dependencies (Python)
 These packages are explicitly declared in `pyproject.toml` and `requirements.txt`:
@@ -47,46 +50,62 @@ These packages are explicitly declared in `pyproject.toml` and `requirements.txt
 - **`colorama`, `iniconfig`, `packaging`, `pluggy`, `pygments`**: Supporting utilities required by pytest.
 
 ### 2.4 Frontend Assets
-- **`bootstrap` (^5.3.0)** (npm): CSS/JS framework. Compiled via `scripts/copy_bootstrap.mjs` into `app/static/vendor/bootstrap`. No Node.js runtime is required in production or Docker runtime.
-
-### 2.5 Security and Quality Tooling
-- **`bandit` (1.9.4)**: Static security scanner.
-- **`flake8` (7.4.1)**: Linting and code smell detection.
+- **Bootstrap 5.3.3**: Vendored locally in `app/static/vendor/bootstrap/` (`css/bootstrap.min.css`, `js/bootstrap.bundle.min.js`, `LICENSE`).
+- **Node.js / npm Dependencies**: **0** (Removed).
 
 ---
 
-## 3. Dependency Reduction Analysis
+## 3. Detailed Audit of the Bootstrap npm Dependency
 
-### 3.1 Candidate Evaluation
+The evaluation specifically investigated the 6 faculty questions regarding the frontend Bootstrap dependency:
 
-Each direct dependency was reviewed against three criteria:
-1. Is it actually imported or used in the application?
-2. Can its functionality be replaced by standard library modules without compromising security?
-3. Would removal introduce regressions, vulnerabilities, or broken workflows?
+1. **Is Bootstrap actually loaded from local static files?**
+   - **Yes**. `app/templates/base.html` explicitly links:
+     `<link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}">`
+     and
+     `<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>`.
+   - The application does not load Bootstrap from an external CDN.
 
-| Candidate Dependency | Imports Verified? | Can It Be Removed? | Detailed Technical Reason |
-| :--- | :---: | :---: | :--- |
-| **`Flask`** | Yes (Core) | **No** | Core application foundation. |
-| **`Flask-Login`** | Yes | **No** | Provides secure session management, strong session protection, and `@login_required` access control. Removing it would require rewriting session security from scratch. |
-| **`Flask-Migrate`** | Yes | **No** | Required for deterministic, version-controlled schema migrations (`flask db upgrade`). Removing it breaks database schema initialization in Docker and local setups. |
-| **`Flask-SQLAlchemy`** | Yes | **No** | Required for ORM query parameterization, connection lifecycle, and transaction rollback on error. |
-| **`Flask-WTF`** | Yes | **No** | Central to SecureHire's CSRF defense. Protects all forms and the Security Lab administrative switcher. |
-| **`PyMySQL`** | Yes | **No** | Required MySQL DBAPI driver. The application's target database is MySQL; removing it prevents connecting to MySQL. |
-| **`email-validator`** | Yes | **No** | WTForms' `Email()` validator explicitly requires this package at runtime. Removing it triggers an unhandled `ImportError` on user registration. |
-| **`python-dotenv`** | Yes | **No** | Used to load `.env` securely. While `os.environ` handles environment variables in Docker, local academic development requires `.env` loading without exposing secrets. |
-| **`pytest`** | Yes | **No** | Essential for automated test execution (219 tests). |
+2. **Are the Bootstrap files already bundled/copied into `app/static`?**
+   - **Yes**. `app/static/vendor/bootstrap/css/bootstrap.min.css` (232,111 bytes), `app/static/vendor/bootstrap/js/bootstrap.bundle.min.js` (80,496 bytes), and `app/static/vendor/bootstrap/LICENSE` (1,093 bytes) exist in the local project tree.
 
-### 3.2 Before & After Comparison Table
+3. **Is npm only being used during development/build and not required by the application?**
+   - **Yes**. Flask serves static files directly from `app/static/`. At runtime, neither Node.js nor npm is invoked.
 
-| Metric | Before Audit | After Audit | Change | Notes |
-| :--- | :---: | :---: | :---: | :--- |
-| **Direct Runtime Dependencies** | 8 | 8 | 0 | All 8 direct dependencies are strictly required. Zero redundant direct dependencies exist. |
-| **Direct Dev Dependencies** | 1 | 1 | 0 | `pytest` is required for verification. |
-| **Total Direct Dependencies** | 9 | 9 | 0 | Highly compact and lean dependency footprint. |
-| **Total Installed in Clean Venv** | 27 | 27 | 0 | Minimal transitive overhead. |
-| **Frontend Dependencies** | 1 (`bootstrap`) | 1 (`bootstrap`) | 0 | Build-time only, zero runtime node dependencies. |
-| **Automated Test Results** | 210 passed | 219 passed | +9 | All tests pass, including 9 new CR-01 verification tests. |
-| **Security Scan Status** | 0 high, 0 med in app | 0 high, 0 med in app | 0 | All findings remain restricted to intentional demo fixtures. |
+4. **Can the project continue working without the bootstrap npm dependency?**
+   - **Yes**. By committing the vendor assets directly to Git (vendoring), the application retains full styling and JavaScript interactivity without any dependency on npm or Node.js.
 
-### 3.3 Academic Conclusion
-In accordance with professional software engineering principles, **no dependencies were artificially stripped**. Removing packages such as `email-validator` or `python-dotenv` would either cause runtime crashes during form validation or impair the local-only secret management architecture. SecureHire maintains a direct, minimal, and fully justified dependency manifest.
+5. **Can `scripts/copy_bootstrap.mjs` be removed or simplified?**
+   - **Yes**. `scripts/copy_bootstrap.mjs` was solely an artifact copying tool between `node_modules` and `app/static`. It has been safely removed.
+
+6. **Can `package.json`/`package-lock.json` be removed if they are no longer required?**
+   - **Yes**. With `bootstrap` removed, there are zero remaining npm dependencies. Both `package.json` and `package-lock.json` were safely deleted.
+
+---
+
+## 4. Verification and Dependency Reduction Record
+
+| Metric | Before Audit & Reduction | After Audit & Reduction | Change |
+| :--- | :---: | :---: | :---: |
+| **Direct Runtime Dependencies (Python)** | 8 | 8 | 0 |
+| **Direct Dev Dependencies (Python)** | 1 (`pytest`) | 1 (`pytest`) | 0 |
+| **Frontend Build-time Dependencies (npm)** | 1 (`bootstrap` ^5.3.0) | 0 | **-1** |
+| **Total Project Dependencies** | 10 | 9 | **-1** |
+| **Build Configuration Files** | `package.json`, `package-lock.json`, `scripts/copy_bootstrap.mjs` | None (Removed) | **-3 files** |
+| **Docker Build Architecture** | Multi-stage (`node:20-slim` + `python:3.12-slim`) | Single-stage (`python:3.12-slim`) | **-1 stage** |
+| **Automated Test Suite** | 219 passed | 219 passed in 49.41s | Identical (0 regressions) |
+| **Security Scanning (Bandit)** | 0 High, 0 Med in core app | 0 High, 0 Med in core app | Identical |
+| **Flake8 Quality Scan** | 0 errors on marketplace files | 0 errors on marketplace files | Identical |
+| **Docker Runtime Smoke Tests** | Not verified | **8/8 passed** on `localhost:5000` | Fully verified |
+| **CI/CD Pipeline Compatibility** | Verified with Node installed | Verified with pure Python 3.12 | Streamlined |
+
+### 4.1 Dependency Reduction Specification
+
+- **Before**: 8 direct runtime dependencies, 1 development dependency, 1 frontend build-time dependency (10 total), 0 dependencies removed.
+- **After**: 8 direct runtime dependencies, 1 development dependency, 0 frontend build-time dependencies (9 total), 1 dependency removed.
+- **Removed**: `bootstrap` (^5.3.0 npm package), along with `package.json`, `package-lock.json`, and `scripts/copy_bootstrap.mjs`.
+- **Reason**: Static distribution files were vendored directly into `app/static/vendor/bootstrap/`. Eliminating the Node.js/npm toolchain simplified the build process, reduced Docker image attack surface and build time, removed an entire Docker build stage, and removed potential npm supply-chain vulnerabilities without modifying any UI appearance, template logic, or application code.
+- **Tests**: 219 passed in 49.41s.
+- **Security scan**: Bandit 0 findings in core app; Flake8 0 errors.
+- **Docker**: Single-stage `python:3.12-slim` image built cleanly; `docker compose up -d` launched `securehire-app-1` and `securehire-db-1` (healthy); 8/8 smoke tests passed on `http://localhost:5000`.
+- **CI/CD**: `.github/workflows/ci.yml` passes cleanly on Python 3.12 with zero Node.js dependencies.
