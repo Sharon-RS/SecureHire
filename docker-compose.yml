@@ -1,0 +1,50 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: securehire_dev
+      MYSQL_USER: securehire_app
+      MYSQL_PASSWORD: synthetic-docker-db-password-local
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u securehire_app -psynthetic-docker-db-password-local || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - securehire-internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      APP_ENV: development
+      SECRET_KEY: synthetic-docker-compose-secret-key-not-for-production
+      DATABASE_URL: "mysql+pymysql://securehire_app:synthetic-docker-db-password-local@db:3306/securehire_dev"
+      TEST_DATABASE_URL: "sqlite+pysqlite:///:memory:"
+      SESSION_COOKIE_SECURE: "false"
+      LAB_ENABLE: "false"
+      ENFORCE_LOOPBACK: "false"
+      SEED_DEMO: "true"
+      SECUREHIRE_DEMO_PASSWORD: "Synthetic-Demo-Password-123!"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - securehire-internal
+
+networks:
+  securehire-internal:
+    driver: bridge
+
+volumes:
+  db_data:
+    name: securehire_db_data

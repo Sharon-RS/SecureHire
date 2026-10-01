@@ -1,7 +1,10 @@
 """Marketplace repository helpers."""
 
+from decimal import Decimal
+
 from sqlalchemy import or_
 
+from ..extensions import db
 from ..models import Gig, Proposal, Review
 
 
@@ -9,7 +12,11 @@ def find_gig(gig_id: int) -> Gig | None:
     return Gig.query.filter_by(id=gig_id).first()
 
 
-def search_open_gigs(query: str | None = None) -> list[Gig]:
+def search_open_gigs(
+    query: str | None = None,
+    category: str | None = None,
+    max_budget: Decimal | None = None,
+) -> list[Gig]:
     statement = Gig.query.filter_by(status="open")
     term = (query or "").strip()
     if term:
@@ -20,7 +27,23 @@ def search_open_gigs(query: str | None = None) -> list[Gig]:
                 Gig.category.contains(term, autoescape=True),
             )
         )
+    cat = (category or "").strip()
+    if cat:
+        statement = statement.filter(Gig.category == cat)
+    if max_budget is not None:
+        statement = statement.filter(Gig.budget <= max_budget)
     return statement.order_by(Gig.created_at.desc(), Gig.id.desc()).limit(100).all()
+
+
+def distinct_open_categories() -> list[str]:
+    rows = (
+        db.session.query(Gig.category)
+        .filter_by(status="open")
+        .distinct()
+        .order_by(Gig.category.asc())
+        .all()
+    )
+    return [r[0] for r in rows if r[0]]
 
 
 def find_proposal(proposal_id: int) -> Proposal | None:
@@ -41,7 +64,6 @@ def proposals_for_freelancer(freelancer_id: int) -> list[Proposal]:
         .order_by(Proposal.created_at.desc(), Proposal.id.desc())
         .all()
     )
-
 
 
 def find_review_for_reviewer(proposal_id: int, reviewer_id: int) -> Review | None:

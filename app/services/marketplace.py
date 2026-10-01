@@ -1,5 +1,4 @@
-"""Marketplace write operations and state transitions."""
-
+from dataclasses import dataclass
 from decimal import Decimal
 
 from sqlalchemy.exc import IntegrityError
@@ -110,7 +109,6 @@ def close_gig(gig: Gig) -> None:
     db.session.commit()
 
 
-
 def submit_review(
     proposal_id: int,
     reviewer_id: int,
@@ -157,3 +155,52 @@ def submit_review(
         db.session.rollback()
         raise MarketplaceError("You have already reviewed this interaction.") from exc
     return review
+
+
+MAX_SEARCH_QUERY_LENGTH = 100
+MAX_CATEGORY_FILTER_LENGTH = 80
+MIN_BUDGET_BOUND = Decimal("0.00")
+MAX_BUDGET_BOUND = Decimal("99999999.99")
+
+
+@dataclass(frozen=True)
+class MarketplaceFilterCriteria:
+    query: str = ""
+    category: str = ""
+    max_budget: Decimal | None = None
+
+    @classmethod
+    def from_params(
+        cls,
+        query: str | None = None,
+        category: str | None = None,
+        max_budget_raw: str | None = None,
+    ) -> "MarketplaceFilterCriteria":
+        clean_query = (query or "").strip()[:MAX_SEARCH_QUERY_LENGTH]
+        clean_category = (category or "").strip()[:MAX_CATEGORY_FILTER_LENGTH]
+
+        parsed_budget = None
+        if max_budget_raw is not None and str(max_budget_raw).strip() != "":
+            try:
+                val = Decimal(str(max_budget_raw).strip())
+                if MIN_BUDGET_BOUND <= val <= MAX_BUDGET_BOUND:
+                    parsed_budget = val
+            except (ArithmeticError, ValueError):
+                parsed_budget = None
+
+        return cls(
+            query=clean_query,
+            category=clean_category,
+            max_budget=parsed_budget,
+        )
+
+
+def filter_open_gigs(criteria: MarketplaceFilterCriteria) -> list[Gig]:
+    """Retrieve open marketplace gigs filtered by validated criteria using parameterized ORM queries."""
+    from ..repositories.marketplace import search_open_gigs
+
+    return search_open_gigs(
+        query=criteria.query or None,
+        category=criteria.category or None,
+        max_budget=criteria.max_budget,
+    )

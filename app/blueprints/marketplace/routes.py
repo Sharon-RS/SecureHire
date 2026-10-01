@@ -15,20 +15,21 @@ from ...forms.marketplace import (
 )
 from ...models import Gig, Proposal
 from ...repositories.marketplace import (
+    distinct_open_categories,
     find_gig,
     find_proposal,
-    proposals_for_gig,
-    proposals_for_freelancer,
-    search_open_gigs,
     find_review_for_reviewer,
+    proposals_for_gig,
     reviews_for_gig,
 )
 from ...services.authorization import roles_required
 from ...services.marketplace import (
     MarketplaceError,
+    MarketplaceFilterCriteria,
     change_proposal_status,
     close_gig,
     create_gig,
+    filter_open_gigs,
     submit_proposal,
     submit_review,
 )
@@ -44,9 +45,22 @@ def _get_gig_or_404(gig_id: int) -> Gig:
 
 @bp.get("/gigs")
 def browse_gigs():
-    search = request.args.get("q", "", type=str)[:100].strip()
-    gigs = search_open_gigs(search)
-    return render_template("marketplace/gigs.html", gigs=gigs, search=search)
+    criteria = MarketplaceFilterCriteria.from_params(
+        query=request.args.get("q"),
+        category=request.args.get("category"),
+        max_budget_raw=request.args.get("max_budget"),
+    )
+    gigs = filter_open_gigs(criteria)
+    categories = distinct_open_categories()
+    raw_max_budget = (request.args.get("max_budget") or "").strip()
+    return render_template(
+        "marketplace/gigs.html",
+        gigs=gigs,
+        search=criteria.query,
+        selected_category=criteria.category,
+        max_budget=str(criteria.max_budget) if criteria.max_budget is not None else raw_max_budget,
+        categories=categories,
+    )
 
 
 @bp.get("/gigs/<int:gig_id>")
@@ -185,9 +199,6 @@ def proposal_detail(proposal_id: int):
         owner_view=current_user.id == proposal.gig.owner_id,
         my_review=my_review,
     )
-
-
-
 
 
 @bp.route("/proposals/<int:proposal_id>/review", methods=["GET", "POST"])

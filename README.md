@@ -156,3 +156,115 @@ To exercise Security Misconfiguration, sign in with any synthetic account and op
 ## Security milestone boundary
 
 Implemented demonstrations: SQL Injection, Stored XSS, Reflected XSS, IDOR/BOLA, CSRF, Unrestricted File Upload, Path Traversal, Clickjacking, Authentication / Session Security, and Security Misconfiguration. All 10 planned security modules are fully implemented with isolated educational demonstrations. All demonstrations operate strictly on bounded synthetic fixtures; real system files and arbitrary OS files are never accessed; and lab-run records store only bounded status values.
+
+---
+
+## Academic Requirements & Extended Deliverables
+
+### 1. Requirements.txt
+SecureHire defines a clean, direct, and unbloated dependency manifest in `requirements.txt`:
+```text
+Flask>=3.0,<4.0
+Flask-Login>=0.6,<1.0
+Flask-Migrate>=4.0,<5.0
+Flask-SQLAlchemy>=3.1,<4.0
+Flask-WTF>=1.2,<2.0
+PyMySQL>=1.1,<2.0
+email-validator>=2.1,<3.0
+python-dotenv>=1.0,<2.0
+pytest>=8.0
+```
+- Direct runtime packages: 8
+- Development/test packages: 1 (`pytest`)
+- Verification: Validated in an isolated clean virtual environment; all tests pass (`219 passed`).
+
+### 2. Docker Architecture and Containerization
+The project includes containerization using Docker and Docker Compose:
+- **`Dockerfile`**: Multi-stage build. Stage 1 (`node:20-slim`) compiles local Bootstrap 5 assets. Stage 2 (`python:3.12-slim`) installs Python dependencies, copies assets, and sets up non-root application execution.
+- **`docker-compose.yml`**: Orchestrates two isolated services on a bridge network (`securehire-internal`):
+  - `app`: Web application exposed on `127.0.0.1:5000:5000`.
+  - `db`: MySQL 8.0 server with persistent named volume `securehire_db_data` and healthcheck (`mysqladmin ping`).
+- **`docker-entrypoint.sh`**: Handles database readiness polling (up to 30 attempts), runs schema migrations (`flask db upgrade`), and idempotently seeds synthetic demo records (`python scripts/seed_demo.py`).
+- **`.env.docker.example`**: Safe synthetic configuration keeping vulnerable lab modes disabled by default (`LAB_ENABLE=false`).
+
+To run locally with Docker:
+```powershell
+# Start Docker Desktop if not running, then:
+docker compose build
+docker compose up -d
+docker compose ps
+# When finished:
+docker compose down
+```
+
+### 3. Security Testing and Static Code Analysis
+Static security vulnerability scanning and code quality auditing were performed:
+- **Bandit (v1.9.4)**: AST-based Python security scanner. Scanned 48 source files (~3,500 LOC). Detected 0 High severity issues. 3 Medium severity issues were correctly identified exclusively within the isolated educational demo modules (`app/services/demos/sqli/vulnerable.py`, `stored_xss/vulnerable.py`, `reflected_xss/vulnerable.py`). Core application routes have 0 security findings.
+- **Flake8 (v7.4.1)**: Analyzed code structure, unused imports (F401), unused variables (F841), and PEP8 formatting.
+- Full details, findings table, and remediations are documented in [docs/security-analysis.md](docs/security-analysis.md).
+
+### 4. Client Change Request CR-01
+- **Request**: *"Clients want to filter marketplace gigs by category and maximum budget so that they can narrow results to suitable freelance services."*
+- **Baseline**: Marketplace only supported keyword query search (`/gigs?q=...`).
+- **Enhanced Capability**: Allows simultaneous keyword search, exact category filtering, and maximum budget upper-bound filtering.
+
+### 5. Secure Implementation of CR-01
+- **SQL Injection Prevention**: All filter conditions (`category`, `max_budget`) are bound as parameterized values through SQLAlchemy ORM (`statement.filter(Gig.category == cat)` and `statement.filter(Gig.budget <= max_budget)`). No string formatting or raw SQL is used.
+- **Input Validation & Bounds**:
+  - Keyword: Capped at 100 characters.
+  - Category: Sanitized and capped at 80 characters.
+  - Max Budget: Parsed with `Decimal`, validated between `0.00` and `99,999,999.99`. Non-numeric or negative values are safely ignored without raising unhandled 500 errors.
+- **Automated Test Coverage**: 9 dedicated automated test cases in `tests/test_marketplace.py` verifying no-filter baseline, category filter, budget filter, combined filters, invalid categories, negative/non-numeric budget inputs, extreme upper bounds, SQLi payload neutralization, and regression protection.
+
+### 6. Code Smell Analysis (Before vs. After)
+- **Code Smell 1: Fat Route / Mixed Responsibilities**:
+  - *Before*: The route function parsed query strings, performed type conversions, executed validation, and built queries directly inside the HTTP controller.
+  - *After*: Extracted `MarketplaceFilterCriteria` dataclass with `.from_params()` factory and `filter_open_gigs()` service function in `app/services/marketplace.py`. The route now delegates validation and querying cleanly.
+- **Code Smell 2: Magic Values**:
+  - *Before*: Magic numbers (100, 80, 99999999.99) scattered across route and template.
+  - *After*: Centralized constants (`MAX_SEARCH_QUERY_LENGTH`, `MAX_CATEGORY_FILTER_LENGTH`, `MIN_BUDGET_BOUND`, `MAX_BUDGET_BOUND`).
+- **Code Smell 3: Unused Imports**:
+  - *Before*: `proposals_for_freelancer` was imported in `app/blueprints/marketplace/routes.py` but never referenced (F401).
+  - *After*: Removed unused import, achieving 0 Flake8 errors on all marketplace source files.
+
+### 7. Internal Module Connectivity
+AST dependency mapping revealed a strict layered architecture:
+- **Presentation Tier**: `blueprints.*` (Auth, Main, Marketplace, Security Lab)
+- **Validation Tier**: `forms`
+- **Domain & Security Tier**: `services.marketplace`, `services.security_modes`, `services.authorization`, `services.demos`
+- **Data Access Tier**: `repositories.marketplace`, `repositories.auth`
+- **Foundation Tier**: `models`, `extensions`, `security`
+- Complete dependency matrix and Mermaid graph are documented in [docs/module-dependency-analysis.md](docs/module-dependency-analysis.md).
+
+### 8. Dependent vs. Independent Modules
+- **Dependent Modules**: Modules with high outgoing internal dependencies that orchestrate workflows (`blueprints.marketplace` [outgoing: 6], `blueprints.security_lab` [outgoing: 6], `blueprints.auth` [outgoing: 4]).
+- **Independent / Low-Coupling Modules**: Foundation modules with 0 internal dependencies (`app.models` [incoming: 9, outgoing: 0], `app.extensions` [incoming: 8, outgoing: 0], `app.security` [incoming: 2, outgoing: 0]).
+- **Cycle Free**: 0 circular dependencies exist; the system is a strict Directed Acyclic Graph (DAG).
+
+### 9. Dependency Inventory
+- **Direct Runtime**: 8 packages (`Flask`, `Flask-Login`, `Flask-Migrate`, `Flask-SQLAlchemy`, `Flask-WTF`, `PyMySQL`, `email-validator`, `python-dotenv`).
+- **Development/Test**: 1 package (`pytest`).
+- **Transitive**: 14 supporting packages (`alembic`, `werkzeug`, `sqlalchemy`, `jinja2`, `wtforms`, etc.).
+- **Frontend**: 1 package (`bootstrap 5.3.x` via npm, compiled at build time).
+- Documented in [docs/dependency-inventory.md](docs/dependency-inventory.md).
+
+### 10. Dependency Reduction
+- Evaluated all 8 direct dependencies for potential removal.
+- Determined that all 8 are essential: removing `PyMySQL` breaks database connectivity; removing `email-validator` breaks WTForms email validation; removing `Flask-WTF` breaks CSRF defense.
+- Zero redundant or unused dependencies exist. The manifest is minimal and justified.
+
+### 11. Updated CI/CD Pipeline
+- **Continuous Integration (`.github/workflows/ci.yml`)**:
+  - Installs dependencies from `requirements.txt` and editable project.
+  - Executes Bandit static security scanner (`bandit -r app run_local.py --exit-zero`).
+  - Executes the full test suite (`pytest -q --junitxml=test-results.xml`).
+  - Result: **219 passed**.
+- **Continuous Delivery (`.github/workflows/cd.yml`)**:
+  - Triggers automatically upon successful CI completion on `master`.
+  - Builds release package with `python -m build` and uploads release artifact.
+
+### 12. Change Request Traceability
+Complete end-to-end traceability linking CR-01 requirement -> use case -> service/repository implementation -> security controls -> 9 test cases -> static security scan -> Jira issue specification is documented in [docs/cr-01-traceability.md](docs/cr-01-traceability.md).
+
+### 13. Academic Evidence Checklist
+The 15-item academic evidence collection checklist with verification commands and artifact links is detailed in [docs/evidence-checklist.md](docs/evidence-checklist.md).

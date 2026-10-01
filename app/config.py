@@ -20,7 +20,7 @@ class BaseConfig:
     SESSION_COOKIE_SAMESITE = "Lax"
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
     MAX_CONTENT_LENGTH = 1 * 1024 * 1024
-    ENFORCE_LOOPBACK = True
+    ENFORCE_LOOPBACK = os.getenv("ENFORCE_LOOPBACK", "true").strip().lower() in {"true", "1", "yes"}
     LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
     LAB_ENABLE = os.getenv("LAB_ENABLE", "").strip().lower() in {"true", "1", "yes"}
 

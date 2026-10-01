@@ -20,14 +20,21 @@ PROPOSAL_DATA = {
 }
 
 
-def make_gig(app, owner_id, title="Create a visual identity", description=None):
+def make_gig(
+    app,
+    owner_id,
+    title="Create a visual identity",
+    description=None,
+    category="Design",
+    budget=Decimal("850.00"),
+):
     with app.app_context():
         gig = Gig(
             owner_id=owner_id,
             title=title,
             description=description or "A synthetic project description for a local test gig.",
-            category="Design",
-            budget=Decimal("850.00"),
+            category=category,
+            budget=budget,
             status="open",
         )
         db.session.add(gig)
@@ -253,3 +260,113 @@ def test_a_gig_cannot_accept_multiple_proposals(app):
     with app.app_context():
         assert db.session.get(Proposal, first_proposal_id).status == "accepted"
         assert db.session.get(Proposal, second_proposal_id).status == "pending"
+
+
+def test_cr01_filter_gigs_no_filters(app, client):
+    owner_id = make_user(app, "buyer1@example.test", "buyer")
+    make_gig(app, owner_id, title="Frontend UI Design", category="Design", budget=Decimal("400.00"))
+    make_gig(app, owner_id, title="Technical Article", category="Writing", budget=Decimal("150.00"))
+    response = client.get("/gigs")
+    assert response.status_code == 200
+    assert b"Frontend UI Design" in response.data
+    assert b"Technical Article" in response.data
+
+
+def test_cr01_filter_gigs_by_category(app, client):
+    owner_id = make_user(app, "buyer2@example.test", "buyer")
+    make_gig(app, owner_id, title="Logo Branding Package", category="Design", budget=Decimal("500.00"))
+    make_gig(app, owner_id, title="Backend API Development", category="Engineering", budget=Decimal("1200.00"))
+    response = client.get("/gigs?category=Design")
+    assert response.status_code == 200
+    assert b"Logo Branding Package" in response.data
+    assert b"Backend API Development" not in response.data
+
+
+def test_cr01_filter_gigs_by_max_budget(app, client):
+    owner_id = make_user(app, "buyer3@example.test", "buyer")
+    make_gig(app, owner_id, title="Small Script", category="Engineering", budget=Decimal("100.00"))
+    make_gig(app, owner_id, title="Medium Audit", category="Security", budget=Decimal("600.00"))
+    make_gig(app, owner_id, title="Enterprise Architecture", category="Engineering", budget=Decimal("5000.00"))
+    response = client.get("/gigs?max_budget=600.00")
+    assert response.status_code == 200
+    assert b"Small Script" in response.data
+    assert b"Medium Audit" in response.data
+    assert b"Enterprise Architecture" not in response.data
+
+
+def test_cr01_filter_gigs_combined_category_and_budget(app, client):
+    owner_id = make_user(app, "buyer4@example.test", "buyer")
+    make_gig(app, owner_id, title="Affordable Design", category="Design", budget=Decimal("300.00"))
+    make_gig(app, owner_id, title="Premium Design", category="Design", budget=Decimal("1500.00"))
+    make_gig(app, owner_id, title="Affordable Writing", category="Writing", budget=Decimal("200.00"))
+    response = client.get("/gigs?category=Design&max_budget=500.00")
+    assert response.status_code == 200
+    assert b"Affordable Design" in response.data
+    assert b"Premium Design" not in response.data
+    assert b"Affordable Writing" not in response.data
+
+
+def test_cr01_filter_gigs_invalid_category(app, client):
+    owner_id = make_user(app, "buyer5@example.test", "buyer")
+    make_gig(app, owner_id, title="Existing Gig", category="Design", budget=Decimal("300.00"))
+    response = client.get("/gigs?category=NonExistentCategory999")
+    assert response.status_code == 200
+    assert b"No gigs matched the selected filters." in response.data
+    assert b"Existing Gig" not in response.data
+
+
+def test_cr01_filter_gigs_invalid_or_negative_budget(app, client):
+    owner_id = make_user(app, "buyer6@example.test", "buyer")
+    make_gig(app, owner_id, title="Standard Gig", category="Design", budget=Decimal("500.00"))
+
+    # Negative budget should be gracefully ignored rather than causing error
+    neg_response = client.get("/gigs?max_budget=-100")
+    assert neg_response.status_code == 200
+    assert b"Standard Gig" in neg_response.data
+
+    # Non-numeric budget string should be gracefully ignored
+    invalid_response = client.get("/gigs?max_budget=not-a-number")
+    assert invalid_response.status_code == 200
+    assert b"Standard Gig" in invalid_response.data
+
+
+def test_cr01_filter_gigs_large_budget(app, client):
+    owner_id = make_user(app, "buyer7@example.test", "buyer")
+    make_gig(app, owner_id, title="High Value Project", category="Engineering", budget=Decimal("50000.00"))
+
+    # Valid high budget
+    response = client.get("/gigs?max_budget=99999999.99")
+    assert response.status_code == 200
+    assert b"High Value Project" in response.data
+
+    # Exceeding bound budget handled safely without database numeric overflow
+    overflow_response = client.get("/gigs?max_budget=9999999999999999999999")
+    assert overflow_response.status_code == 200
+    assert b"High Value Project" in overflow_response.data
+
+
+def test_cr01_filter_gigs_sqli_input_treated_as_data(app, client):
+    owner_id = make_user(app, "buyer8@example.test", "buyer")
+    make_gig(app, owner_id, title="Security Review", category="Security", budget=Decimal("1000.00"))
+
+    # SQLi strings in category and max_budget are parameterized by SQLAlchemy ORM
+    sqli_cat = client.get("/gigs?category=' OR '1'='1")
+    assert sqli_cat.status_code == 200
+    assert b"No gigs matched the selected filters." in sqli_cat.data
+
+    sqli_budget = client.get("/gigs?max_budget=1' OR '1'='1'--")
+    assert sqli_budget.status_code == 200
+    # Malformed budget value is safely treated as unparseable, gracefully ignored
+    assert b"Security Review" in sqli_budget.data
+
+
+def test_cr01_normal_marketplace_behavior_regression_protection(app, client):
+    owner_id = make_user(app, "buyer9@example.test", "buyer")
+    make_gig(app, owner_id, title="Web Accessibility Audit", category="Engineering", budget=Decimal("800.00"))
+    make_gig(app, owner_id, title="Mobile App Accessibility", category="Engineering", budget=Decimal("1200.00"))
+
+    # Combined keyword search, category, and budget
+    response = client.get("/gigs?q=Accessibility&category=Engineering&max_budget=1000.00")
+    assert response.status_code == 200
+    assert b"Web Accessibility Audit" in response.data
+    assert b"Mobile App Accessibility" not in response.data
